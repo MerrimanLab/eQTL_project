@@ -7,14 +7,22 @@
 #    4. update gene dimension table  
 #    5. update the eQTL table
 #
-# The process is scripted here, largely just so I can loop and extract tissue
-# names easily. However, all heavy lifting is handled by calls to mysql.
+# NOTES:
+# ------
+#   - user should enter appropriate username, password and hostname 
+#     (system calls to db_query() requires blank password at this stage
+#      WARNING: remember to add password to user afterwards)
+#   - this ETL script should be saved in the parent directory above where the 
+#     raw eQTL files are saved.  
+#   - may be run either locally, or on the database server's host  
+#   - originally queries were passed to the db via RMySQL::dbGetQuery(), however this 
+#     caused excessive row locks. Seems to work when making system calls (see db_query() below)
 #
 # Nick Burns
 # June 2016
 
 library(RMySQL)
-setwd("/mnt/DataDrive/gEXPR_eQTL_Datasets/GTEXData/eQTL/")
+setwd("./eQTL")
 
 # GLOBAL VARIABLES
 # SQL Connection settings - you need to put appropriate values in here.
@@ -22,18 +30,18 @@ mysql_user <- ""
 mysql_password <- ""
 mysql_host <- ""
 
-eqtl_file_pattern <- "_Analysis_cis-eQTLs.txt.gz"
+eqtl_file_pattern <- "_Analysis_cis-eQTLs.txt"
 eqtl_files <- list.files(".", pattern = eqtl_file_pattern)
 
 # HELPER FUNCTIONS
-strip_suffix <- function (x, suffix = "_Analysis_cis-eQTLs.txt.gz") {
+strip_suffix <- function (x, suffix = "_Analysis_cis-eQTLs.txt") {
     
     # Strips the end off a file name (or string)
     tissue <- substr(x, start = 1, stop = nchar(x) - nchar(suffix))
     return (tissue)
 }
 pop_tissue_dimension <- function (x) {
-    query <- sprintf("INSERT INTO dimTissue VALUES (DEFAULT, 'x')")
+    query <- sprintf("INSERT INTO dimTissue VALUES (DEFAULT, '%s')", x)
     return (query)
 }
 reset_staging <- function (conn) {
@@ -82,7 +90,11 @@ pop_fact <- function (tissue_id) {
     FROM eQTL_staging;
     ", tissue_id)
 }
-
+db_query <- function (query, username = "nickburns", host = "biocvisg0.otago.ac.nz", db = "eQTL_dw") {
+    execute <- sprintf('mysql -u %s -h %s -D %s -e "%s"',
+                       username, host, db, query)
+    return(execute)
+}
 
 # main loop...
 master_start <- Sys.time()
@@ -97,30 +109,26 @@ for (eQTL_file in eqtl_files) {
     print("")
     lcl_start <- Sys.time()
     
-    # lcl_eqtl_file
-    lcl_file <- strip_suffix(eQTL_file, suffix = ".gz")
-    
     # extract tissue name
     tissue <- strip_suffix(eQTL_file)
-    
-    # unzip the file
-    if (!file.exists(lcl_file)) {
-        print("... unzipping ...")
-        system(sprintf("gunzip %s", eQTL_file))
-    }
+
     # update tissue dim
-    dbGetQuery(conn, pop_tissue_dimension(tissue))
+    print("    ... updating dimTissue")
+    system(db_query(pop_tissue_dimension(tissue)))
     
     # load eQTL data in staging table
-    reset_staging(conn)
-    dbGetQuery(conn, etl(lcl_file))
+    print("    ... bulk load into staging")
+    system(db_query("delete from eQTL_staging;"))
+    system(db_query(etl(eQTL_file)))
     
     # update gene dim
-    dbGetQuery(conn, pop_gene_dimension())
+    print("    ... updating dimGene")
+    system(db_query(pop_gene_dimension()))
     
     # update factQTL
+    print("    ... updating fact table")
     tissue_id <- dbGetQuery(conn, get_tissue_id(tissue))
-    dbGetQuery(conn, pop_fact(tissue_id))
+    system(db_query(pop_fact(tissue_id$tissue_id)))
     
     lcl_end <- Sys.time()
     print(sprintf("Time for %s: %s", eQTL_file, lcl_end - lcl_start))
@@ -130,5 +138,5 @@ for (eQTL_file in eqtl_files) {
 }
 dbDisconnect(conn)
 
-master_end <- sys.time()
-print(sprintf("Total time:  %s"), master_end - master_start)
+master_end <- Sys.time()
+print(sprintf("Total time:  %s", master_end - master_start))
