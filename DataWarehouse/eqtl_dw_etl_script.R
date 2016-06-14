@@ -56,7 +56,9 @@ etl <- function (eqtl_file) {
     return (query)
 }
 pop_gene_dimension <- function () {
-    query <- "INSERT INTO dimGene (ensembl_id, chromosome)
+    query <- "
+                LOCK TABLES dimGene WRITE, eQTL_staging WRITE, dimGene as g WRITE, eQTL_staging as stage WRITE ;
+                INSERT INTO dimGene (ensembl_id, chromosome)
                 SELECT DISTINCT stage.ensembl_id, stage.chromosome
                 FROM (
                         SELECT 
@@ -65,7 +67,8 @@ pop_gene_dimension <- function () {
                         FROM eQTL_staging
                      ) as stage
                 LEFT OUTER JOIN dimGene g on stage.ensembl_id = g.ensembl_id
-                WHERE g.ensembl_id IS NULL;
+                WHERE g.ensembl_id IS NULL limit 500;
+                UNLOCK TABLES;
     "
     return (query)
 }
@@ -77,6 +80,7 @@ get_tissue_id <- function (tissue) {
 }
 pop_fact <- function (tissue_id) {
     query <- sprintf("
+    LOCK TABLES eQTL_staging WRITE, factQTL WRITE;
     INSERT INTO factQTL (ensembl_id, tissue, chromosome, build_37_pos, beta, tstat, pvalue, source_name)
     SELECT 
         substring_index(ensembl_id, '.', 1),
@@ -88,6 +92,7 @@ pop_fact <- function (tissue_id) {
         pvalue,
         'GTEx'
     FROM eQTL_staging;
+    UNLOCK TABLES;
     ", tissue_id)
 }
 db_query <- function (query, username = "nickburns", host = "biocvisg0.otago.ac.nz", db = "eQTL_dw") {
@@ -98,11 +103,6 @@ db_query <- function (query, username = "nickburns", host = "biocvisg0.otago.ac.
 
 # main loop...
 master_start <- Sys.time()
-conn <- RMySQL::dbConnect(RMySQL::MySQL(),
-                          username = mysql_user,
-                          password = mysql_password,
-                          host = mysql_host,
-                          dbname = "eQTL_dw")
 for (eQTL_file in eqtl_files) {
     
     print(sprintf("-------------    %s    -------------", eQTL_file))
@@ -127,7 +127,13 @@ for (eQTL_file in eqtl_files) {
     
     # update factQTL
     print("    ... updating fact table")
+    conn <- RMySQL::dbConnect(RMySQL::MySQL(),
+                              username = mysql_user,
+                              password = mysql_password,
+                              host = mysql_host,
+                              dbname = "eQTL_dw")
     tissue_id <- dbGetQuery(conn, get_tissue_id(tissue))
+    dbDisconnect(conn)
     system(db_query(pop_fact(tissue_id$tissue_id)))
     
     lcl_end <- Sys.time()
@@ -136,7 +142,6 @@ for (eQTL_file in eqtl_files) {
     print("")
     
 }
-dbDisconnect(conn)
 
 master_end <- Sys.time()
 print(sprintf("Total time:  %s", master_end - master_start))
