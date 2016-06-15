@@ -67,7 +67,7 @@ pop_gene_dimension <- function () {
                         FROM eQTL_staging
                      ) as stage
                 LEFT OUTER JOIN dimGene g on stage.ensembl_id = g.ensembl_id
-                WHERE g.ensembl_id IS NULL limit 500;
+                WHERE g.ensembl_id IS NULL;
                 UNLOCK TABLES;
     "
     return (query)
@@ -80,19 +80,7 @@ get_tissue_id <- function (tissue) {
 }
 pop_fact <- function (tissue_id) {
     query <- sprintf("
-    LOCK TABLES eQTL_staging WRITE, factQTL WRITE;
-    INSERT INTO factQTL (ensembl_id, tissue, chromosome, build_37_pos, beta, tstat, pvalue, source_name)
-    SELECT 
-        substring_index(ensembl_id, '.', 1),
-        '%s',
-        substring_index(snp_id, '_', 1),
-        substring_index(substring_index(snp_id, '_', 2), '_', -1),
-        beta,
-        tstat,
-        pvalue,
-        'GTEx'
-    FROM eQTL_staging;
-    UNLOCK TABLES;
+        CALL eQTL_dw.populateFact(%s);
     ", tissue_id)
 }
 db_query <- function (query, username = "nickburns", host = "biocvisg0.otago.ac.nz", db = "eQTL_dw") {

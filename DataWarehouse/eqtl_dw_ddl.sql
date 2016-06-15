@@ -49,3 +49,25 @@ create table if not exists factQTL
     foreign key (tissue) references dimTissue (tissue_id),
     foreign key (source_name) references dimDataSource (source_name)
 );
+
+
+drop procedure if exists populateFact;
+
+delimiter //
+create procedure populateFact(IN lcl_tissue int)
+begin
+	   
+	INSERT INTO factQTL (ensembl_id, tissue, chromosome, build_37_pos, beta, tstat, pvalue, source_name)
+		SELECT 
+			substring_index(ensembl_id, '.', 1),
+			lcl_tissue,
+			substring_index(snp_id, '_', 1) as chromosome,
+			substring_index(substring_index(snp_id, '_', 2), '_', -1),
+			beta,
+			tstat,
+			pvalue,
+			'GTEx'
+		FROM eQTL_staging ;
+    
+END //
+delimiter ;
