@@ -50,6 +50,13 @@ create table if not exists factQTL
     foreign key (source_name) references dimDataSource (source_name)
 );
 
+## Create INDEX {gene, chromosome, tissue}
+## Let most likely query will be: "for a given gene, which is on chromosome C,
+## return all eQTLs (filtered / grouped by tissue)
+create index idx_eqtls on factQTL (ensembl_id, tissue) using btree;
+## note {ensembl_id, chromosome} is unqiue anyway, so no need to specify chromosome.
+## eQTLs are all defined relative to a GENE, so a CHR:start-end lookup is not relevant.
+
 
 drop procedure if exists populateFact;
 
