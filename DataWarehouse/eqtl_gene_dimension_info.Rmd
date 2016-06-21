@@ -1,0 +1,60 @@
+---
+title: "Update_dimGene"
+author: "Nick Burns"
+date: "21 June 2016"
+output: html_document
+---
+
+The eQTL data warehouse is populated. However, all eQTLs are referenced to a gene with an ensembl identifier. We also want to include the gene symbol alongside the ensembl id to facilitate easier lookups for users.
+
+```{r}
+mysql_user <- ""
+mysql_host <- ""
+query <- "SELECT DISTINCT ensembl_id FROM eQTL_dw.dimGene;"
+
+library(RMySQL)
+conn <- dbConnect(RMySQL::MySQL(), user = mysql_user, host = mysql_host)
+results <- dbGetQuery(conn, query)
+dbDisconnect(conn)
+```
+
+We will use biomaRt to get the gene symbols
+
+```{r}
+library(biomaRt)
+
+ensembl = useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice" ,dataset="hsapiens_gene_ensembl")
+biomart_results <- getBM(filters = "ensembl_gene_id",
+                         attributes = c("ensembl_gene_id", "hgnc_symbol", "chromosome_name", "start_position", "end_position"),
+                         values = results,
+                         mart = ensembl)
+head(biomart_results)
+
+```
+
+There are 15 more rows in the results than the genes that went in. So, there must be some duplicate mappings.
+
+```{r}
+gene_count <- table(biomart_results$ensembl_gene_id)
+biomart_results[biomart_results$ensembl_gene_id %in% names(gene_count[gene_count > 1]), ]
+```
+
+The question is what should we do about these genes? I think the easiest route will be to make a second identifier, which maps to unique ensembl ids. This can then be the foreign key reference. If these gene ids then map to more tha one eQTL result set, I don't think it will really matter - becuase the start and end positions are identical, so they are really the same.
+
+```{r}
+biomart_results$gene_id <- as.integer(factor(biomart_results$ensembl_gene_id, labels = 1:length(results)))
+head(biomart_results)
+```
+
+Save to file, and bulk insert.
+
+```{r}
+write.csv(biomart_results[, c("gene_id", "ensembl_gene_id", "hgnc_symbol", "chromosome_name", "start_position", "end_position")],
+          "/mnt/DataDrive/gEXPR_eQTL_Datasets/eQTLdb/dimGene.csv", row.names = FALSE)
+
+query <- sprintf("LOAD DATA INFILE '%s' INTO TABLE dimGene IGNORE 1 LINES;", 
+                 "/mnt/DataDrive/gEXPR_eQTL_Datasets/eQTLdb/dimGene.csv")
+
+system(sprintf("mysql -u nickburns -h biocvisg0.otago.ac.nz -D eQTL_dw -e '%s'", query))
+
+```
