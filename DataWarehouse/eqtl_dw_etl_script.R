@@ -79,7 +79,10 @@ get_tissue_id <- function (tissue) {
     return (query)
 }
 pop_fact <- function (tissue_id, source_id) {
-    query <- sprintf("call qtl_populate_fact(%s, %s);", tissue_id, source_id)
+    query <- sprintf("
+                     LOCK TABLES factQTL WRITE, eqtl_staging WRITE, eqtl_staging as stage WRITE, dimGene WRITE, dimGene as gene WRITE;
+                     call qtl_populate_fact(%s, %s);
+                     UNLOCK TABLES;", tissue_id, source_id)
 }
 db_query <- function (query, username = "nickburns", host = "biocvisg0.otago.ac.nz", db = "eQTL_dw") {
     execute <- sprintf('mysql -u %s -h %s -D %s -e "%s"',

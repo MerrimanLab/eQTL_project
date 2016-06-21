@@ -37,7 +37,7 @@ begin
                 tstat,
                 pvalue
 			from eqtl_staging
-            where pvalue < 0.001
+            where pvalue < 0.0001
         ) as stage
         inner join (
 			select distinct ensembl_id, gene_id
