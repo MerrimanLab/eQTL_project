@@ -4,7 +4,7 @@
 #    1. for each eQTL file (each a single tissue), extract the tissue name
 #    2. load eQTL data into staging table  
 #    3. update tissue dimension table
-#    4. update gene dimension table  
+#    4. update gene dimension table  (already loaded)
 #    5. update the eQTL table
 #
 # NOTES:
@@ -13,7 +13,7 @@
 #     (system calls to db_query() requires blank password at this stage
 #      WARNING: remember to add password to user afterwards)
 #   - this ETL script should be saved in the parent directory above where the 
-#     raw eQTL files are saved.  
+#     raw eQTL files are saved. (i.e. on the database server!)  
 #   - may be run either locally, or on the database server's host  
 #   - originally queries were passed to the db via RMySQL::dbGetQuery(), however this 
 #     caused excessive row locks. Seems to work when making system calls (see db_query() below)
@@ -45,13 +45,13 @@ pop_tissue_dimension <- function (x) {
     return (query)
 }
 reset_staging <- function (conn) {
-    dbGetQuery(conn, "delete from eQTL_staging;")
+    query <- "call qtl_reset_staging();"
 }
 etl <- function (eqtl_file) {
     
     # Performs a bulk load, ignoring the header in each file
     query <- sprintf("LOAD DATA LOCAL INFILE '%s'
-                     INTO TABLE eQTL_staging
+                     INTO TABLE eqtl_staging
                      IGNORE 1 LINES;", eqtl_file)
     return (query)
 }
@@ -78,10 +78,8 @@ get_tissue_id <- function (tissue) {
         WHERE tissue_description = '%s';", tissue)
     return (query)
 }
-pop_fact <- function (tissue_id) {
-    query <- sprintf("
-        CALL eQTL_dw.populateFact(%s);
-    ", tissue_id)
+pop_fact <- function (tissue_id, source_id) {
+    query <- sprintf("call qtl_populate_fact(%s, %s);", tissue_id, source_id)
 }
 db_query <- function (query, username = "nickburns", host = "biocvisg0.otago.ac.nz", db = "eQTL_dw") {
     execute <- sprintf('mysql -u %s -h %s -D %s -e "%s"',
@@ -106,12 +104,13 @@ for (eQTL_file in eqtl_files) {
     
     # load eQTL data in staging table
     print("    ... bulk load into staging")
-    system(db_query("delete from eQTL_staging;"))
+    system(db_query(reset_staging()))
     system(db_query(etl(eQTL_file)))
     
-    # update gene dim
-    print("    ... updating dimGene")
-    system(db_query(pop_gene_dimension()))
+#     # update gene dim
+#     print("    ... updating dimGene")
+#     system(db_query(pop_gene_dimension()))
+#     # NOTE: this has already been bulk loaded.
     
     # update factQTL
     print("    ... updating fact table")
@@ -122,7 +121,7 @@ for (eQTL_file in eqtl_files) {
                               dbname = "eQTL_dw")
     tissue_id <- dbGetQuery(conn, get_tissue_id(tissue))
     dbDisconnect(conn)
-    system(db_query(pop_fact(tissue_id$tissue_id)))
+    system(db_query(pop_fact(tissue_id$tissue_id, 1)))
     
     lcl_end <- Sys.time()
     print(sprintf("Time for %s: %s", eQTL_file, lcl_end - lcl_start))

@@ -1,7 +1,15 @@
+# Schema definition for eQTL data warehouse
+#
+# Nick Burns
+# created: June 2016
+
 create database if not exists eQTL_dw;
 use eQTL_dw;
 
-create table if not exists eQTL_staging 
+# Staging table
+# -------------
+# Used for bulk insert of raw GTEx data files.
+create table if not exists eqtl_staging 
 (
 	ensembl_id varchar (32),
     snp_id varchar(32),
@@ -9,72 +17,91 @@ create table if not exists eQTL_staging
     tstat float,
     pvalue float
 );
+# Pvalues will be filtered to pvalue <= 0.001 (see data loading procedures for documentation)
+create index idx_staging on eqtl_staging (pvalue);
 
-create table if not exists dimGene
+# Data tables
+# -----------
+#
+# Very simple schema:
+#    - dimDataSource
+#        * description of where the data came from (initially just GTEx, but will add to over time)
+#    - dimGene
+#        * all distinct ensembl_ids have been previously extracted
+#        * ensembl_ids were mapped to gene symbols, chromosome, start and end positions using R (biomaRt)
+#    - dimTissue
+#        * eQTLs are generally tissue-specific, this maps each eQTL to the relevant tissue
+#    - factQTL
+#        * the main data table, contains QTLs and relevant statistics
+# NOTE: the GTEx data is ~ 400 GB over 6 billion rows. To reduce this, we have filtered on pvalues and kept 
+#       data types to the smallest possible types.
+
+# dimGene
+#    - contains enesmbl_id, gene symbol and genomic coordinates
+#    - 9 ensembl_ids map to more than one gene symbol
+#        e.g. ENSXXXX -> MIR50A, MIR50B, MIR50C
+#        only seems to affect SNORA and MIR genes
+#    - Given this restriction, the natural primary key is the
+#        combination of (gene_symbol, ensembl_id).
+#        However, users are most likely to query by gene_symbol and then
+#        join to the fact table via gene_id. Thus, we will define a PK:
+#        (gene_symbol, gene_id) to facilitate this lookup / join.
+#        NOTE: this means all factQTL lookups should include:
+#                 ... WHERE dimGene.gene_symbol = x
+create table dimGene 
 (
-    ensembl_id varchar(32),
-    gene_symbol varchar(32),
-    chromosome varchar(2) not null,
-    primary key (ensembl_id),
-    constraint unique(ensembl_id, gene_symbol),
-    constraint unique (ensembl_id, gene_symbol, chromosome)
+	gene_id smallint not null,
+    ensembl_id varchar(32) not null,
+    gene_symbol varchar(16) not null,
+    chromosome tinyint not null,
+    start_pos int not null,
+    end_pos int not null
 );
+# the following index facilitates user queries
+create index idx_gene_symbol on dimGene (gene_symbol, gene_id) using btree;
+# the following index is inplace for the bulk load of factQTL,
+# which is done from ensembl_id
+create index idx_gene_ensembl on dimGene (ensembl_id, gene_id) using hash;
 
-create table if not exists dimTissue
+# dimTissue
+#    - eQTLs are tissue-specific, this table facilitates that mapping
+create table dimTissue
 (
-	tissue_id int not null auto_increment,
+	tissue_id tinyint not null auto_increment,
     tissue_description varchar(128) not null,
     primary key (tissue_id)
 );
 
-create table if not exists dimDataSource
+create table dimDataSource
 (
+	source_id tinyint not null auto_increment,
     source_name varchar(32) not null,
-    source_description varchar(512) null,    # long-form description if required
-    primary key (source_name)
+    source_description varchar(256),
+    primary key (source_id)
 );
-insert into dimDataSource values ("GTEx", "GTEx public eQTL release V6.");
+insert into dimDataSource values (DEFAULT, "GTEx", "GTEx public release v6");
 
-create table if not exists factQTL
+# factQTL
+#    - main data table with all relevant eQTL statistics
+#    - pvalues filtered to only keep pvalues <= 0.001 (see procedure definitions).
+#    - alleles were initially omitted, but included now to facilitate joint GWAS:eQTL analysis
+#        proposed by Zhu et al (Nature, 2016) 
+#        (Integration of summary data from GWAS and eQTL studies predicts complex trait gene targets)
+#    - NOTE: that we cannot have a FK references to dimGene using gene_id - referential integrity needs 
+#            to be imposed in the data load code!
+create table factQTL 
 (
-	ensembl_id varchar(32) not null,
-    tissue int not null,
-    chromosome varchar(2) not null,
+	gene_id smallint not null,
+    tissue_id tinyint not null,
+    chromosome tinyint not null,
     build_37_pos int not null,
+    A1 varchar(2),
+    A2 varchar(2),
     beta float,
     tstat float,
     pvalue float,
-    source_name varchar(32) not null,
-    foreign key (ensembl_id) references dimGene (ensembl_id),
-    foreign key (tissue) references dimTissue (tissue_id),
-    foreign key (source_name) references dimDataSource (source_name)
+    source_id tinyint not null,
+    foreign key (tissue_id) references dimTissue (tissue_id),
+    foreign key (source_id) references dimDataSource (source_id)
 );
-
-## Create INDEX {gene, chromosome, tissue}
-## Let most likely query will be: "for a given gene, which is on chromosome C,
-## return all eQTLs (filtered / grouped by tissue)
-create index idx_eqtls on factQTL (ensembl_id, tissue) using btree;
-## note {ensembl_id, chromosome} is unqiue anyway, so no need to specify chromosome.
-## eQTLs are all defined relative to a GENE, so a CHR:start-end lookup is not relevant.
-
-
-drop procedure if exists populateFact;
-
-delimiter //
-create procedure populateFact(IN lcl_tissue int)
-begin
-	   
-	INSERT INTO factQTL (ensembl_id, tissue, chromosome, build_37_pos, beta, tstat, pvalue, source_name)
-		SELECT 
-			substring_index(ensembl_id, '.', 1),
-			lcl_tissue,
-			substring_index(snp_id, '_', 1) as chromosome,
-			substring_index(substring_index(snp_id, '_', 2), '_', -1),
-			beta,
-			tstat,
-			pvalue,
-			'GTEx'
-		FROM eQTL_staging ;
-    
-END //
-delimiter ;
+create index idx_qtl_gene_tissue on factQTL (gene_id, tissue_id);
