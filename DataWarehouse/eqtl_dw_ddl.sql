@@ -3,6 +3,7 @@
 # Nick Burns
 # created: June 2016
 
+drop database if exists eQTL_dw;
 create database if not exists eQTL_dw;
 use eQTL_dw;
 
@@ -104,4 +105,4 @@ create table factQTL
     foreign key (tissue_id) references dimTissue (tissue_id),
     foreign key (source_id) references dimDataSource (source_id)
 );
-create index idx_qtl_gene_tissue on factQTL (gene_id, tissue_id);
+#create index idx_qtl_gene_tissue on factQTL (gene_id, tissue_id);

@@ -26,9 +26,9 @@ setwd("./eQTL")
 
 # GLOBAL VARIABLES
 # SQL Connection settings - you need to put appropriate values in here.
-mysql_user <- ""    
+mysql_user <- "nickburns"    
 mysql_password <- ""
-mysql_host <- ""
+mysql_host <- "biocvisg0.otago.ac.nz"
 
 eqtl_file_pattern <- "_Analysis_cis-eQTLs.txt"
 eqtl_files <- list.files(".", pattern = eqtl_file_pattern)
@@ -81,7 +81,7 @@ get_tissue_id <- function (tissue) {
 pop_fact <- function (tissue_id, source_id) {
     query <- sprintf("
                      LOCK TABLES factQTL WRITE, eqtl_staging WRITE, eqtl_staging as stage WRITE, dimGene WRITE, dimGene as gene WRITE;
-                     call qtl_populate_fact(%s, %s);
+                     CALL qtl_populate_fact(%s, %s);
                      UNLOCK TABLES;", tissue_id, source_id)
 }
 db_query <- function (query, username = "nickburns", host = "biocvisg0.otago.ac.nz", db = "eQTL_dw") {
@@ -89,9 +89,25 @@ db_query <- function (query, username = "nickburns", host = "biocvisg0.otago.ac.
                        username, host, db, query)
     return(execute)
 }
+db_commit <- function () {
+    system(db_query("commit;"))
+}
+toggle_config <- function (config_setting, state = 1) {
+    # toggles the state of a given configuration setting
+    # NOTE: default state is to ENABLE a setting
+    query <- sprintf("SET %s %s;", config_setting, state)
+    system(db_query(query))
+}
 
 # main loop...
 master_start <- Sys.time()
+
+# BULK INSERT optimisation setting
+toggle_config("autocommit", state = 0)
+toggle_config("foreign_key_checks", state = 0)
+toggle_config("sql_log_bin", state = 0)
+toggle_config("unique_checks", state = 0)
+
 for (eQTL_file in eqtl_files) {
     
     print(sprintf("-------------    %s    -------------", eQTL_file))
@@ -104,11 +120,18 @@ for (eQTL_file in eqtl_files) {
     # update tissue dim
     print("    ... updating dimTissue")
     system(db_query(pop_tissue_dimension(tissue)))
+    db_commit()
     
     # load eQTL data in staging table
     print("    ... bulk load into staging")
     system(db_query(reset_staging()))
+    db_commit()
+
     system(db_query(etl(eQTL_file)))
+    db_commit()
+    
+    system(db_query("create index idx_staging on eqtl_staging (pvalue) using hash"))
+    db_commit()
     
 #     # update gene dim
 #     print("    ... updating dimGene")
@@ -124,14 +147,23 @@ for (eQTL_file in eqtl_files) {
                               dbname = "eQTL_dw")
     tissue_id <- dbGetQuery(conn, get_tissue_id(tissue))
     dbDisconnect(conn)
+    
     system(db_query(pop_fact(tissue_id$tissue_id, 1)))
+    db_commit()
     
     lcl_end <- Sys.time()
     print(sprintf("Time for %s: %s", eQTL_file, lcl_end - lcl_start))
     print("")
     print("")
-    
 }
+# finally, truncate the staging table
+system(db_query(reset_staging()))
+
+# reset BULK INSERT optimisation settings
+toggle_config("autocommit")
+toggle_config("foreign_key_checks")
+toggle_config("sql_log_bin")
+toggle_config("unique_checks")
 
 master_end <- Sys.time()
 print(sprintf("Total time:  %s", master_end - master_start))

@@ -5,7 +5,8 @@ drop procedure if exists qtl_reset_staging;
 delimiter //
 create procedure qtl_reset_staging()
 begin
-	delete from eqtl_staging;
+	drop index idx_staging on eqtl_staging;
+	truncate eqtl_staging;
 end //
 delimiter ;
 
