@@ -26,9 +26,9 @@ setwd("./eQTL")
 
 # GLOBAL VARIABLES
 # SQL Connection settings - you need to put appropriate values in here.
-mysql_user <- "nickburns"    
+mysql_user <- ""    
 mysql_password <- ""
-mysql_host <- "biocvisg0.otago.ac.nz"
+mysql_host <- ""
 
 eqtl_file_pattern <- "_Analysis_cis-eQTLs.txt"
 eqtl_files <- list.files(".", pattern = eqtl_file_pattern)
@@ -95,7 +95,7 @@ db_commit <- function () {
 toggle_config <- function (config_setting, state = 1) {
     # toggles the state of a given configuration setting
     # NOTE: default state is to ENABLE a setting
-    query <- sprintf("SET %s %s;", config_setting, state)
+    query <- sprintf("SET %s = %s;", config_setting, state)
     system(db_query(query))
 }
 
