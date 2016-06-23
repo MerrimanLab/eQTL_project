@@ -5,7 +5,7 @@ drop procedure if exists qtl_reset_staging;
 delimiter //
 create procedure qtl_reset_staging()
 begin
-	drop index idx_staging on eqtl_staging;
+
 	truncate eqtl_staging;
 end //
 delimiter ;
@@ -15,10 +15,11 @@ drop procedure if exists qtl_populate_fact;
 delimiter //
 create procedure qtl_populate_fact(IN lcl_tissue tinyint, IN lcl_source tinyint)
 begin
+
 	insert into factQTL (gene_id, tissue_id, chromosome, build_37_pos, A1, A2, beta, tstat, pvalue, source_id)
 		SELECT
 			gene.gene_id,
-            lcl_tissue,
+            lcl_tissue as 'tissue_id',
             stage.chromosome,
             stage.build_37_pos,
             stage.A1,
@@ -27,7 +28,7 @@ begin
             stage.tstat,
             stage.pvalue,
             lcl_source		
-        FROM (
+        FROM ( 
 			select 
 				substring_index(ensembl_id, '.', 1) as ensembl_id,
                 substring_index(snp_id, '_', 1) as chromosome,
@@ -36,9 +37,10 @@ begin
                 substring_index(substring_index(snp_id, '_', -2), '_', 1) as A2,
                 beta,
                 tstat,
-                pvalue
+                pvalue,
+                lcl_tissue as 'tissue_id'
 			from eqtl_staging
-            where pvalue < 0.0001
+            where pvalue < 0.01
         ) as stage
         inner join (
 			select distinct ensembl_id, gene_id

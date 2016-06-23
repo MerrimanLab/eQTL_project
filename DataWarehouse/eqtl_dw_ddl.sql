@@ -18,7 +18,7 @@ create table if not exists eqtl_staging
     tstat float,
     pvalue float
 );
-# Pvalues will be filtered to pvalue <= 0.001 (see data loading procedures for documentation)
+# Pvalues will be filtered to pvalue <= 0.01 (see data loading procedures for documentation)
 create index idx_staging on eqtl_staging (pvalue);
 
 # Data tables
@@ -96,8 +96,8 @@ create table factQTL
     tissue_id tinyint not null,
     chromosome tinyint not null,
     build_37_pos int not null,
-    A1 varchar(2),
-    A2 varchar(2),
+    A1 varchar(24),
+    A2 varchar(24),
     beta float,
     tstat float,
     pvalue float,
@@ -105,4 +105,5 @@ create table factQTL
     foreign key (tissue_id) references dimTissue (tissue_id),
     foreign key (source_id) references dimDataSource (source_id)
 );
-#create index idx_qtl_gene_tissue on factQTL (gene_id, tissue_id);
+#create index idx_qtl_gene_tissue on factQTL (gene_id, tissue_id);  # query based on gene-expression
+# create indec idx_qtl_snp on factQTL (chromosome, build_37_pos);   # query based on snp
