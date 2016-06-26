@@ -1,0 +1,29 @@
+/* 
+  eQTL Browser
+  Style sheet
+
+  Nick Burns
+  June 2016
+*/
+
+.heading {
+    color: #3498db;
+    text-align: center;
+}
+
+.boldtext {
+    color: #2c3e50;
+    font-weight: bold;
+}
+
+.standardtext {
+    color: #2c3e50;
+}
+
+.button {
+    color: #ecf0f1;
+    font-size: 15px;
+    font-weight: bold;
+    text-align: center;
+    background-color: #3498db;
+}
