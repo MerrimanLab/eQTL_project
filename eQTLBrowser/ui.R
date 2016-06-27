@@ -21,10 +21,15 @@ shinyUI(fluidPage(
         
         p("Search eQTLs for:", class = "boldtext"),
         textInput("txt_query", label = "", placeholder = "example: ABCG2"),
-        radioButtons("btn_query", label = "", choices = list(snp = "snp", gene = "gene")),
+        radioButtons("radio_query", label = "", choices = c("snp" = "snp", "gene" = "gene")),
         br(),
         
-        actionButton("btn_query", label = "GO", class = "button")
+        actionButton("btn_query", label = "Search", class = "button")
     ),
-    mainPanel()
+    mainPanel(
+        # TO DO: add hover functionality to this
+        plotOutput("plt_eqtls"),
+        br(),
+        dataTableOutput("tbl_eqtls")
+    )
 ))

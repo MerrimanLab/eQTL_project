@@ -51,7 +51,7 @@ create index idx_staging on eqtl_staging (pvalue);
 #                 ... WHERE dimGene.gene_symbol = x
 create table dimGene 
 (
-	gene_id smallint not null,
+	gene_id int not null,
     ensembl_id varchar(32) not null,
     gene_symbol varchar(16) not null,
     chromosome tinyint not null,
@@ -92,7 +92,7 @@ insert into dimDataSource values (DEFAULT, "GTEx", "GTEx public release v6");
 #            to be imposed in the data load code!
 create table factQTL 
 (
-	gene_id smallint not null,
+	gene_id int not null,
     tissue_id tinyint not null,
     chromosome tinyint not null,
     build_37_pos int not null,

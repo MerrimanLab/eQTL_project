@@ -6,7 +6,7 @@ mkdir ./filtered_sets
 
 for qtl in $( ls *.txt )
 do
-  echo $file  
-  awk '($5 < 0.1)' $file > filtered_sets/$file
+  echo $qtl  
+  awk '($5 < 0.1)' $qtl > filtered_sets/$qtl
 done
 

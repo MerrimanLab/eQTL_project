@@ -130,7 +130,7 @@ for (eQTL_file in eqtl_files) {
     system(db_query(etl(eQTL_file)))
     db_commit()
     
-    system(db_query("create index idx_staging on eqtl_staging (pvalue) using hash"))
+    #system(db_query("create index idx_staging on eqtl_staging (pvalue) using hash"))
     db_commit()
     
 #     # update gene dim
