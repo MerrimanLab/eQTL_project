@@ -106,4 +106,4 @@ create table factQTL
     foreign key (source_id) references dimDataSource (source_id)
 );
 #create index idx_qtl_gene_tissue on factQTL (gene_id, tissue_id);  # query based on gene-expression
-# create indec idx_qtl_snp on factQTL (chromosome, build_37_pos);   # query based on snp
+# create index idx_qtl_snp on factQTL (chromosome, build_37_pos);   # query based on snp

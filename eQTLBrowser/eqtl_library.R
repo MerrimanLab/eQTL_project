@@ -23,6 +23,12 @@ database <- function (conn = NULL) {
     else close_()
 }
 
+# parse_snp: given an RSID to query, return the chromosome and positions
+# NOTE: that this uses the GLIDA package
+parse_snp <- function (rsid) {
+    return (glida::queryUCSC(glida::updatePositions(rsid)))
+}
+
 # browse: Queries the eQTL_dw
 #
 # Parameters:
@@ -52,8 +58,11 @@ browse <- function (target, type = "gene") {
                         WHERE dimGene.gene_symbol = '%s';", target)
         } else {
             ## need to do more here to turn RSID into chr, pos
-            lcl_chr = 1
-            lcl_pos = 1574241
+            snp_info <- parse_snp(target)
+            lcl_chr <- gsub("chr", "", snp_info$CHR)
+            lcl_pos <- snp_info$POS
+            
+            print(snp_info)
             sprintf("SELECT * 
                     FROM factQTL
                     WHERE chromosome = %s
