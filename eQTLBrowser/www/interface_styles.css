@@ -27,3 +27,19 @@
     text-align: center;
     background-color: #3498db;
 }
+
+.plot_panel {
+    width: 100%;
+    height: 600px;
+}
+
+.plot_main {
+    width: 70%;
+    height: 100%;
+    float: left;
+}
+.plot_thumb {
+    width: 26%;
+    height: 48%;
+    float: right;
+}

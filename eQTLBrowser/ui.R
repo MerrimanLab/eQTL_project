@@ -28,7 +28,16 @@ shinyUI(fluidPage(
     ),
     mainPanel(
         # TO DO: add hover functionality to this
-        plotOutput("plt_eqtls"),
+        tags$div(
+            tags$div(
+                plotOutput("plt_panel_main"),
+                class = "plot_main"
+            ),
+            tags$div(
+                plotOutput("plt_panel_thumb"), 
+                class = "plot_thumb"
+            ), class = "plot_panel"
+        ),
         br(),
         dataTableOutput("tbl_eqtls")
     )
