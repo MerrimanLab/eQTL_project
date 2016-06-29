@@ -7,8 +7,8 @@ drop database if exists eQTL_dw;
 create database if not exists eQTL_dw;
 use eQTL_dw;
 
-# Staging table
-# -------------
+# Staging tables
+# --------------
 # Used for bulk insert of raw GTEx data files.
 create table if not exists eqtl_staging 
 (
@@ -19,7 +19,37 @@ create table if not exists eqtl_staging
     pvalue float
 );
 # Pvalues will be filtered to pvalue <= 0.01 (see data loading procedures for documentation)
-create index idx_staging on eqtl_staging (pvalue);
+create index idx_qtl_staging on eqtl_staging (pvalue);
+
+# staging table to expression data
+create table if not exists expr_staging
+(
+	ensembl_id varchar(20),
+    gene_symbol varchar(20),
+    sample_id varchar(30),
+    rpkm float
+);
+create index idx_expr_staging on expr_staging (ensembl_id, gene_symbol);
+
+# staging table for metadata
+drop table if exists meta_staging;
+create table if not exists meta_staging
+(
+	sample_id varchar(32),
+    smts varchar(36),
+    smtsd varchar(36)
+);
+
+drop table if exists gene_staging;
+create table gene_staging 
+(
+    ensembl_id varchar(32) not null,
+    gene_symbol varchar(32) not null,
+    chromosome tinyint not null,
+    start_pos int not null,
+    end_pos int not null,
+    gene_biotype varchar(32)
+);
 
 # Data tables
 # -----------
@@ -39,24 +69,19 @@ create index idx_staging on eqtl_staging (pvalue);
 
 # dimGene
 #    - contains enesmbl_id, gene symbol and genomic coordinates
-#    - 9 ensembl_ids map to more than one gene symbol
-#        e.g. ENSXXXX -> MIR50A, MIR50B, MIR50C
-#        only seems to affect SNORA and MIR genes
-#    - Given this restriction, the natural primary key is the
-#        combination of (gene_symbol, ensembl_id).
-#        However, users are most likely to query by gene_symbol and then
-#        join to the fact table via gene_id. Thus, we will define a PK:
-#        (gene_symbol, gene_id) to facilitate this lookup / join.
-#        NOTE: this means all factQTL lookups should include:
-#                 ... WHERE dimGene.gene_symbol = x
+#    - Genomic coordinates and biotype queried using biomaRt (see etl_gene_expression.Rmd)
+#    - X, Y, Mt chromosomes ommited, as not analysed by GTEx with regards to eQTLs.
+drop table if exists dimGene;
 create table dimGene 
 (
-	gene_id int not null,
+	gene_id int auto_increment not null,
     ensembl_id varchar(32) not null,
-    gene_symbol varchar(16) not null,
+    gene_symbol varchar(32) not null,
     chromosome tinyint not null,
     start_pos int not null,
-    end_pos int not null
+    end_pos int not null,
+    gene_biotype varchar(32),
+    primary key (gene_id)
 );
 # the following index facilitates user queries
 create index idx_gene_symbol on dimGene (gene_symbol, gene_id) using btree;
@@ -66,10 +91,12 @@ create index idx_gene_ensembl on dimGene (ensembl_id, gene_id) using hash;
 
 # dimTissue
 #    - eQTLs are tissue-specific, this table facilitates that mapping
-create table dimTissue
+drop table if exists dimTissue;
+create table if not exists dimTissue
 (
 	tissue_id tinyint not null auto_increment,
-    tissue_description varchar(128) not null,
+    smts varchar(52),
+    smtsd varchar(52),
     primary key (tissue_id)
 );
 

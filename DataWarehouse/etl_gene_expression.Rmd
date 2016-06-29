@@ -1,0 +1,163 @@
+---
+title: "ETL_GeneExpression"
+author: "Nick Burns"
+date: "28 June 2016"
+output: html_document
+---
+
+## eQTL and Gene Expression Data Warehouse  
+
+We have downloaded both eQTL and gene expression datasets from GTEx. The Merriman lab seem to be primarily interested in the eQTL data. However, the gene expression dataset helps to build context and meaning around the eQTLs. In addition, the gene expression set has already nicely mapped out the naming conventions with the tissue types, and the ensemlb ids with gene symbols. Therefore, the gene epxression set will be our initial starting point for this data warehouse. The slight complication is that this data is huge when converted to a long row-based format (481 million rows) and very difficult to work with, both in R as we as in MariaDB. To get this data loaded an usable, we will do things in a slgihtly cumbersome manner here, but we will get it done.
+
+Workflow:
+
+  1. Read in the expression data and metadata  
+  2. Load the appropriate metadata into the datawarehouse to populate meta_staging  
+  3. From meta_staging populate dimTissue  
+  4. a) From the expression dataset extract a distinct set of (ensembl_id, gene_symbol)  
+     b) Using biomart, get the chromosome, start and end position for each gene  
+     c) load into dimGene  
+  5. Load the expression data, sample by sample, into the staging table  
+  6. From the staging table, join to dimGene and dimTissue to populate factExpression  
+  7. Backup the data warehouse - this is our base template to which we will add the eQTLs.  
+
+## 1. Read in the data
+  
+```{r}
+setwd("~/Documents/GitHub/eQTL_project/DataWarehouse/")
+library(data.table)
+
+expression <- fread("/mnt/DataDrive/gEXPR_eQTL_Datasets/GTEXData/GeneExpression/All_Tissue_Site_Details_Analysis.combined.rpkm.gct")
+meta <- fread("/mnt/DataDrive/gEXPR_eQTL_Datasets/GTEXData/Metadata/GTEx_Data_V6_Annotations_SampleAttributesDS.txt")
+```
+
+## 2. Populate meta_staging  
+
+To ensure the correct data types, the relevant metadata will be written to file and this file will be bulk loaded. NOTE: that if you use RMySQL to load the data, it will insert text data as text rather than VARCHAR & MariaDB can not create an index on TEXT or BLOB fields.  
+
+```{r}
+meta_file <- "/mnt/DataDrive/gEXPR_eQTL_Datasets/GTEXData/Metadata/gtex_metadata.csv"
+write.csv(meta[, .(SAMPID, SMTS, SMTSD)], meta_file, row.names = FALSE)
+```
+
+**INSTRUCTION:**  from MariaDB, bulk load this data into eQTL_dw.meta_staging  (note, this seems more straight forward than calling from here an ensuring that all the quotation marks are right):
+
+mysql> LOAD DATA LOCAL INFILE 'gtex_metadata.csv' INTO TABLE meta_staging FIELDS TERMINATED BY ',' ENCLOSED BY '"' LINES TERMINATED BY '\n' IGNORE 1 LINES;
+
+COMPLETE.
+
+## 3. Populate dimTissue  
+
+dimTissue is a unique combination of (SMTS, SMTSD) in the meta_data. SMTSD is a specific mapping (e.g. Adipose - subcutaneous, Adispose - Visceral etc.). SMTS is a more broad categorisation (e.g. Adipose, Brain etc.). dimTissue will contain both columns, with a unique ID for each distinct combination of these. Queries may then be constructed at either granularity without loss of information. There are only distinct combinations of these, so this isn't too bad at all.
+
+```{r}
+query <- "
+    INSERT INTO dimTissue
+        SELECT DISTINCT smts, smtsd from meta_staging;
+"
+system(sprintf("mysql -u etl_user -D eQTL_dw -e '%s'", query))
+```
+
+There are three empty fields in SMTS that need to be fixed up, we do this manually below:
+
+```{r}
+insert_smts <- function (smts, smtsd) {
+    query <- sprintf("update dimTissue set SMTS = '%s' where SMTSD = '%';")
+    system(sprintf("mysql -u etl_user -D eQTL_dw -e '%s'", query))
+}
+# Stomach
+# Esophagus - Mucosa
+# Skin - Sun Exposed (Lower leg)
+
+# NOTE: actually done in etl_data_warehouse_init_data.sql
+```
+
+## 4. Extract gene info and populate dimGene  
+
+dimGene is a unique combination of (ensembl_id, gene_symbol). However, we also want to match this to chromosome and genomic coordinates as well. We will attempt to do this for as many genes as possible using biomaRt.
+
+Unique (ensembl_id, gene_symbols):
+
+```{r}
+genes <- unique(expression[, .(Name, Description)])
+dim(expression)
+dim(genes)
+length(unique(genes$Description))
+```
+
+Adding genomic coordinates:
+
+```{r}
+library(biomaRt)
+
+ensembl <- useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice", dataset="hsapiens_gene_ensembl")
+biomart_results <- getBM(filters = "hgnc_symbol",
+                         attributes = c("ensembl_gene_id", "hgnc_symbol", 
+                                        "chromosome_name", "start_position", "end_position", "external_gene_name", "gene_biotype"),
+                         values = unique(expression[, Description]),
+                         mart = ensembl)
+head(biomart_results)
+dim(biomart_results)
+```
+
+Damn there are some many-to-manu matches here by the look of things. Which genes are duplciated?
+
+```{r}
+gene_count <- table(biomart_results$hgnc_symbol)
+head(sort(gene_count, decreasing = TRUE), 50)
+
+biomart_results[biomart_results$hgnc_symbol %in% c("EPS8L1", "GP6", "LENG1", "MBOAT7"), ]
+```
+
+Lol - I see the issue, there are some odd chromosome names amongst those. Let's get rid of them.
+
+```{r}
+dim(expression)
+dim(genes)
+length(unique(genes$Description))
+dim(biomart_results[nchar(biomart_results$chromosome_name) < 3, ])
+```
+
+Now we are missing some genes:
+
+```{r}
+genes[!Description %in% biomart_results$hgnc_symbol, Description]
+```
+
+Good news, there appears to be a lot of double ups and they are slightly odd looking gene names. From the Merriman lab's perspective, they certainly aren't going to be querying for any of these odd gene names - where the primary focus will be on protein coding genes. I have modified the biomart query to also return the gene biotype, we will also include this information in the data warehouse. We really have no option here, except to limit to genes which we can name and locate. On the upside, this will slightly reduce the amount of data in this area of the data warehouse, with only a small sacrifice in information.
+
+In addition, only including autosomal chromosomes, as X, Y ans MT wree not analysed by GTEx wtih regards to eQTLs.
+
+```{r}
+final_genes <- biomart_results[biomart_results$chromosome_name %in% 1:22, ]
+head(final_genes)
+dim(final_genes)
+head(sort(table(final_genes$hgnc_symbol), decreasing = T), 10)
+```
+
+There are still some duplications here, but they are microRNAs so not overly phased by this. As before, will write these genes out to file and bulk load from MariaDB.
+
+```{r}
+gene_file <- "/mnt/DataDrive/gEXPR_eQTL_Datasets/GTEXData/GeneExpression/gtex_genes.csv"
+write.csv(final_genes[, c("ensembl_gene_id", "hgnc_symbol", "chromosome_name", "start_position", "end_position", "gene_biotype")],
+          gene_file, row.names = FALSE)
+```
+
+Data loaded: see eqtl_data_warehouse_init-data.sql
+
+## 5. Load expr_staging  
+
+This will be a little cumbersome. Unfortunately, the data is too large to do this in a simple fashion (i.e. melt into a long row-based format and bulk load) - this produces about 30 GB of data, which is risky to bulk insert in one go and then nearly impossible to manipulate. Instead, I will do this column by column - which will still result in hundreds of millions of rows, but with the slgithyl reduced geneset we might get some improvements. Let's see what happens...
+
+To do this:  
+
+  1. take each column and map it to a tissue, extracting the tissueId from the database
+  2. bulk load the column into expr_staging  
+  3. load into factExpression by joing with dimGene  
+
+1 & 2 are simple enough, with (3) being implemented in a stored procedure and called here. CROSS FINGERS...
+
+## 6. populate factExpression  
+
+## 7. Backup the data warehouse  
+
