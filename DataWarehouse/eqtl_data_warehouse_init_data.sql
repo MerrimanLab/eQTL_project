@@ -22,6 +22,10 @@ UPDATE dimTissue
 	set smts = 'Skin'
     where SMTSD = 'Skin - Sun Exposed (Lower leg)';
     
+# Turns out that both the Stomach and esophagus entries are 
+# double ups. Will remove both of these
+delete from dimTissue where tissue_id IN (54, 55, 58);
+    
 SELECT * FROM dimTissue;
 
 ## populate dimGene

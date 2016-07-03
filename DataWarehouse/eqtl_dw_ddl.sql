@@ -22,11 +22,12 @@ create table if not exists eqtl_staging
 create index idx_qtl_staging on eqtl_staging (pvalue);
 
 # staging table to expression data
+drop table if exists expr_staging;
 create table if not exists expr_staging
 (
-	ensembl_id varchar(20),
-    gene_symbol varchar(20),
-    sample_id varchar(30),
+	ensembl_id varchar(32),
+    gene_symbol varchar(32),
+    sample_id varchar(52),
     rpkm float
 );
 create index idx_expr_staging on expr_staging (ensembl_id, gene_symbol);
@@ -88,6 +89,8 @@ create index idx_gene_symbol on dimGene (gene_symbol, gene_id) using btree;
 # the following index is inplace for the bulk load of factQTL,
 # which is done from ensembl_id
 create index idx_gene_ensembl on dimGene (ensembl_id, gene_id) using hash;
+# index for bulk load of expression table
+create index idx_gene_ids on dimGene (ensembl_id, gene_symbol, gene_id) using hash;
 
 # dimTissue
 #    - eQTLs are tissue-specific, this table facilitates that mapping
@@ -96,7 +99,7 @@ create table if not exists dimTissue
 (
 	tissue_id tinyint not null auto_increment,
     smts varchar(52),
-    smtsd varchar(52),
+    smtsd varchar(64),
     primary key (tissue_id)
 );
 
@@ -134,3 +137,18 @@ create table factQTL
 );
 #create index idx_qtl_gene_tissue on factQTL (gene_id, tissue_id);  # query based on gene-expression
 # create index idx_qtl_snp on factQTL (chromosome, build_37_pos);   # query based on snp
+
+# factExpression  
+# Gene Expression data  
+drop table if exists factExpression;
+create table factExpression 
+(
+	gene_id int not null,
+    tissue_id tinyint not null,
+    source_id tinyint not null,
+    rpkm float not null,
+    foreign key (gene_id) references dimGene (gene_id),
+    foreign key (tissue_id) references dimTissue (tissue_id),
+    foreign key (source_id) references dimDataSource (source_id)
+);
+create index idx_expression on factExpression (gene_id, tissue_id) using hash;

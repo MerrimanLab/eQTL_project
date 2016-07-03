@@ -145,19 +145,110 @@ write.csv(final_genes[, c("ensembl_gene_id", "hgnc_symbol", "chromosome_name", "
 
 Data loaded: see eqtl_data_warehouse_init-data.sql
 
-## 5. Load expr_staging  
+## 5. Load expr_staging  & populate fact expression
 
 This will be a little cumbersome. Unfortunately, the data is too large to do this in a simple fashion (i.e. melt into a long row-based format and bulk load) - this produces about 30 GB of data, which is risky to bulk insert in one go and then nearly impossible to manipulate. Instead, I will do this column by column - which will still result in hundreds of millions of rows, but with the slgithyl reduced geneset we might get some improvements. Let's see what happens...
 
 To do this:  
 
-  1. take each column and map it to a tissue, extracting the tissueId from the database
+  1. take each column and map it to a tissue, extracting the tissueID from the database
   2. bulk load the column into expr_staging  
   3. load into factExpression by joing with dimGene  
 
 1 & 2 are simple enough, with (3) being implemented in a stored procedure and called here. CROSS FINGERS...
 
-## 6. populate factExpression  
+```{r}
+library(RMySQL)
+
+conn <- dbConnect(DBI::dbDriver('MySQL'), dbname = 'eQTL_dw', user = 'etl_user')
+dimtissue <- dbGetQuery(conn, 'select * from dimTissue;')
+
+failed_samples <- c()
+for (column in 1498:ncol(expression)) {
+    
+    print(sprintf("Column: %s / %s", column, ncol(expression)))
+    
+    lcl_sample <- colnames(expression)[column]
+    meta_sample <- meta[SAMPID == lcl_sample, .(SMTS, SMTSD)]
+    
+    # account for the 5 meta entries where there is no SMTSD value
+    tissue_id <- if (nchar(meta_sample[, SMTSD]) < 1) {
+        head(dimtissue[dimtissue$smts == meta_sample$SMTS, 'tissue_id', "tissue_id"], 1)
+    } else {
+        dimtissue[dimtissue$smts == meta_sample$SMTS &
+                               dimtissue$smtsd == meta_sample$SMTSD, "tissue_id"]
+    }
+    
+    if (length(tissue_id > 0)) {
+    
+        # each column of expression is (ensembl_id, gene_symbol, rpkm), where each column represents a certain tissue type
+        # BULK LOAD column in expr_staging
+        lcl_expression <- expression[, c(1, 2, column), with = FALSE]
+        colnames(lcl_expression) <- c("ensembl_id", "gene_symbol", "rpkm")
+        dbWriteTable(conn, name = "expr_staging", value = lcl_expression,
+                     field.types = list(ensembl_id = "varchar(32)", gene_symbol = "varchar(32)", rpkm = "float"),
+                     overwrite = FALSE, append = TRUE, row.names = FALSE)
+        
+        # NOTE: 1 = GTEx as data source
+        system(sprintf("mysql -u etl_user -D eQTL_dw -e 'call qtl_populate_fact_expr(%s, %s);'", tissue_id, 1))
+        
+        
+        # truncate the staging table and rinse - repeat
+        system("mysql -u etl_user -D eQTL_dw -e 'truncate expr_staging;'")
+    } else {
+        print(sprintf("please check column : %s", column))
+        failed_samples <- c(failed_samples, column)
+    }
+    
+}
+dbDisconnect(conn)
+```
+
+Deal with the failed samples. Some of the samples didn't load - I suspect this is because the SMTSD column had been truncated in the data warehouse (shoudl fix this!). Need to deal with these 300-odd samples.
+
+Have increased the column width to varchar(64) within the data warehouse. Will reload failed samples.
+
+```{r}
+reload_samples <- failed_samples
+failed_samples <- c()
+
+conn <- dbConnect(DBI::dbDriver('MySQL'), dbname = 'eQTL_dw', user = 'etl_user')
+
+for (column in reload_samples) {
+    
+    print(sprintf("Column: %s / %s", which(reload_samples == column), length(reload_samples)))
+    
+    lcl_sample <- colnames(expression)[column]
+    meta_sample <- meta[SAMPID == lcl_sample, .(SMTS, SMTSD)]
+    
+    tissue_id <- if (meta_sample[, SMTSD] == "Stomach") {
+        23
+    } else if (meta_sample[, SMTSD] == "Brain - Anterior cingulate cortex (BA24)") {
+        41
+    } else if (meta_sample[, SMTSD] == "Brain - Nucleus accumbens (basal ganglia)") {
+        45
+    } else if (meta_sample[, SMTSD] == "Esophagus - Gastroesophageal Junction") {
+        22
+    } else 29    # Skin - sun Exposed (Lower leg)
+
+    # populate staging & fact
+    lcl_expression <- expression[, c(1, 2, column), with = FALSE]
+    colnames(lcl_expression) <- c("ensembl_id", "gene_symbol", "rpkm")
+    
+    dbWriteTable(conn, name = "expr_staging", value = lcl_expression,
+                 field.types = list(ensembl_id = "varchar(32)", gene_symbol = "varchar(32)", rpkm = "float"),
+                 overwrite = FALSE, append = TRUE, row.names = FALSE)
+    
+    # NOTE: 1 = GTEx as data source
+    system(sprintf("mysql -u etl_user -D eQTL_dw -e 'call qtl_populate_fact_expr(%s, %s);'", tissue_id, 1))
+    
+    
+    # truncate the staging table and rinse - repeat
+    system("mysql -u etl_user -D eQTL_dw -e 'truncate expr_staging;'")
+}
+dbDisconnect(conn)
+```
 
 ## 7. Backup the data warehouse  
 
+All the expression data is now loaded! Will backup the data warehouse, push it over to the VISG server and focus on populating the eQTL data.
