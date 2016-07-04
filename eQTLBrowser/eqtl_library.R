@@ -79,6 +79,37 @@ browse <- function (target, type = "gene") {
     return (results)
 }
 
+# NOTE: something really weird happended trying to join factExpression with dimTissue
+#       the cardinality blew out enormously. Resorting to a merge in R here to work around this.
+browse_expression <- function (target) {
+    
+    query <- function () {
+        lcl_query <- sprintf("
+                                SELECT 
+                                    g.gene_symbol, 
+                                    g.chromosome, 
+                                    g.gene_biotype,
+                                    f.rpkm,
+                                    f.tissue_id
+                                FROM factExpression as f
+                                  INNER JOIN dimGene as g ON g.gene_id = f.gene_id
+                                WHERE g.gene_symbol = '%s';
+                             ", target)
+        return (lcl_query)
+    }
+    conn <- database()
+    results <- data.table(dbGetQuery(conn, query()))
+    dimTissue <- data.table(dbGetQuery(conn, "select * from dimTissue;"))
+    database(conn)
+    
+    setkey(results, tissue_id)
+    setkey(dimTissue, tissue_id)
+    
+    results <- results[dimTissue]
+    
+    return (results[!is.na(gene_symbol)])
+}
+
 dummy_data <- function (gene, data_type = "genotype_distributions") {
     
     

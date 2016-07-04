@@ -36,6 +36,10 @@ shinyUI(fluidPage(
             tags$div(
                 plotOutput("plt_panel_thumb"), 
                 class = "plot_thumb"
+            ), 
+            tags$div(
+                plotOutput("plt_panel_bottom"),
+                class = "plot_bottom"
             ), class = "plot_panel"
         ),
         br(),

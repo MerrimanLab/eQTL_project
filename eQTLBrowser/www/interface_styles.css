@@ -43,3 +43,8 @@
     height: 48%;
     float: right;
 }
+.plot_bottom {
+    width: 96%;
+    height: 100%;
+    float: left;
+}

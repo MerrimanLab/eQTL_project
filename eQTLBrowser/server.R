@@ -37,6 +37,15 @@ shinyServer(function(input, output) {
                 theme_minimal()
         })
         
+        output$plt_panel_bottom <- renderPlot({
+            
+            ggplot(browse_expression(lcl_gene), aes(x = SMTSD, y = rpkm, group = SMTSD)) +
+                geom_boxplot(aes(colour = smts, fill = smts), alpha = 0.5) +
+                theme_minimal() +
+                xlab("") +
+                theme(axis.text.x = element_text(angle = 60, vjust = 0.7))
+            
+        })
         output$tbl_eqtls <- renderDataTable({data})
     })
 })

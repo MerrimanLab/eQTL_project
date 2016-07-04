@@ -3,12 +3,11 @@
 # PLAN:  
 #    1. for each eQTL file (each a single tissue), extract the tissue name
 #    2. load eQTL data into staging table  
-#    3. update tissue dimension table
-#    4. update gene dimension table  (already loaded)
-#    5. update the eQTL table
+#    3. update the eQTL table. This requires a (large) join to both dimTissue and dimGene.
 #
 # NOTES:
 # ------
+#   - ASSUMES that the data warehouse is already populated with dimTissue, dimGene, dimDataSource and factExpression.
 #   - user should enter appropriate username, password and hostname 
 #     (system calls to db_query() requires blank password at this stage
 #      WARNING: remember to add password to user afterwards)
@@ -40,10 +39,7 @@ strip_suffix <- function (x, suffix = "_Analysis_cis-eQTLs.txt") {
     tissue <- substr(x, start = 1, stop = nchar(x) - nchar(suffix))
     return (tissue)
 }
-pop_tissue_dimension <- function (x) {
-    query <- sprintf("INSERT INTO dimTissue VALUES (DEFAULT, '%s')", x)
-    return (query)
-}
+
 reset_staging <- function (conn) {
     query <- "call qtl_reset_staging();"
 }
@@ -53,29 +49,6 @@ etl <- function (eqtl_file) {
     query <- sprintf("LOAD DATA LOCAL INFILE '%s'
                      INTO TABLE eqtl_staging
                      IGNORE 1 LINES;", eqtl_file)
-    return (query)
-}
-pop_gene_dimension <- function () {
-    query <- "
-                LOCK TABLES dimGene WRITE, eQTL_staging WRITE, dimGene as g WRITE, eQTL_staging as stage WRITE ;
-                INSERT INTO dimGene (ensembl_id, chromosome)
-                SELECT DISTINCT stage.ensembl_id, stage.chromosome
-                FROM (
-                        SELECT 
-                            substring_index(ensembl_id, '.', 1) as ensembl_id,
-                            substring_index(snp_id,'_',1) as chromosome
-                        FROM eQTL_staging
-                     ) as stage
-                LEFT OUTER JOIN dimGene g on stage.ensembl_id = g.ensembl_id
-                WHERE g.ensembl_id IS NULL;
-                UNLOCK TABLES;
-    "
-    return (query)
-}
-get_tissue_id <- function (tissue) {
-    query <- sprintf(
-        "SELECT * from dimTissue
-        WHERE tissue_description = '%s';", tissue)
     return (query)
 }
 pop_fact <- function (tissue_id, source_id) {
@@ -117,40 +90,16 @@ for (eQTL_file in eqtl_files) {
     # extract tissue name
     tissue <- strip_suffix(eQTL_file)
 
-    # update tissue dim
-    print("    ... updating dimTissue")
-    system(db_query(pop_tissue_dimension(tissue)))
-    db_commit()
-    
     # load eQTL data in staging table
     print("    ... bulk load into staging")
     system(db_query(reset_staging()))
-    db_commit()
-
     system(db_query(etl(eQTL_file)))
     db_commit()
     
-    #system(db_query("create index idx_staging on eqtl_staging (pvalue) using hash"))
-    db_commit()
+    # populate factQTL...
     
-#     # update gene dim
-#     print("    ... updating dimGene")
-#     system(db_query(pop_gene_dimension()))
-#     # NOTE: this has already been bulk loaded.
     
-    # update factQTL
-    print("    ... updating fact table")
-    conn <- RMySQL::dbConnect(RMySQL::MySQL(),
-                              username = mysql_user,
-                              password = mysql_password,
-                              host = mysql_host,
-                              dbname = "eQTL_dw")
-    tissue_id <- dbGetQuery(conn, get_tissue_id(tissue))
-    dbDisconnect(conn)
-    
-    system(db_query(pop_fact(tissue_id$tissue_id, 1)))
-    db_commit()
-    
+    # informational only
     lcl_end <- Sys.time()
     print(sprintf("Time for %s: %s", eQTL_file, lcl_end - lcl_start))
     print("")
