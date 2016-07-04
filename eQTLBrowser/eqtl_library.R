@@ -46,7 +46,7 @@ browse <- function (target, type = "gene") {
                 sprintf("
                         SELECT
                             dimGene.gene_symbol,
-                            dimTissue.tissue_description,
+                            dimTissue.SMTS,
                             factQTL.chromosome,
                             factQTL.build_37_pos,
                             factQTL.A1,
@@ -77,4 +77,22 @@ browse <- function (target, type = "gene") {
     database(conn)
     
     return (results)
+}
+
+dummy_data <- function (gene, data_type = "genotype_distributions") {
+    
+    
+    tmp <- if (data_type == "genotype_distributions") {
+        data.frame(genotype = rep(1:3, each = 100),
+                   expression = c(rnorm(100, mean = 10, sd = 3),
+                                  rnorm(100, mean = 15, sd = 4),
+                                  rnorm(100, mean = 20, sd = 2.5)),
+                   gene = gene)
+    } else {
+        data.frame(pvalue = sample(rpois(1000, 10)), 
+                   build_37_pos = 1:1000,
+                   gene = gene)
+    }
+    
+    return (tmp)
 }

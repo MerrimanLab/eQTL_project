@@ -24,13 +24,17 @@ shinyServer(function(input, output) {
         data <- browse(lcl_gene, input$radio_query)
         
         output$plt_panel_main <- renderPlot({
-            ggplot(data, aes(x = build_37_pos, y = -log10(pvalue+1e-20))) +
+            ggplot(dummy_data(lcl_gene, data_type = "qtls"), aes(x = build_37_pos, y = -log10(pvalue+1e-20))) +
                 geom_point(colour = "dodgerblue", alpha = 0.8) +
                 theme_minimal()
         })
         
         output$plt_panel_thumb <- renderPlot({
-                ggplot(iris, aes(Sepal.Length, Sepal.Width, colour = Species)) + geom_point()
+                
+            ggplot(dummy_data(lcl_gene), aes(x = genotype, y = expression, group = genotype)) +
+                geom_boxplot(colour = "dodgerblue", fill = "dodgerblue", alpha = 0.6) +
+                geom_jitter(colour = "darkgrey", alpha = 0.2) +
+                theme_minimal()
         })
         
         output$tbl_eqtls <- renderDataTable({data})
