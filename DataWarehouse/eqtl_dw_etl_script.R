@@ -21,15 +21,16 @@
 # June 2016
 
 library(RMySQL)
-setwd("./eQTL")
+#setwd("./eQTL")
+setwd("/mnt/DataDrive/gEXPR_eQTL_Datasets/GTEXData/eQTL/filtered_sets/")
 
 # GLOBAL VARIABLES
 # SQL Connection settings - you need to put appropriate values in here.
-mysql_user <- ""    
+mysql_user <- "etl_user"    
 mysql_password <- ""
 mysql_host <- ""
 
-eqtl_file_pattern <- "_Analysis_cis-eQTLs.txt"
+eqtl_file_pattern <- "eQTLs.txt"
 eqtl_files <- list.files(".", pattern = eqtl_file_pattern)
 
 # HELPER FUNCTIONS
@@ -39,9 +40,15 @@ strip_suffix <- function (x, suffix = "_Analysis_cis-eQTLs.txt") {
     tissue <- substr(x, start = 1, stop = nchar(x) - nchar(suffix))
     return (tissue)
 }
-
+map_tissue <- function (suffix, db = dimTissue) {
+    
+    suffix <- substr(gsub("_", " ", suffix), 1, 16)
+    idx <- grep(suffix, db$stub)
+    
+    return (db[idx, "tissue_id"])
+}
 reset_staging <- function (conn) {
-    query <- "call qtl_reset_staging();"
+    query <- "call eQTL_dw.qtl_reset_staging();"
 }
 etl <- function (eqtl_file) {
     
@@ -54,10 +61,11 @@ etl <- function (eqtl_file) {
 pop_fact <- function (tissue_id, source_id) {
     query <- sprintf("
                      LOCK TABLES factQTL WRITE, eqtl_staging WRITE, eqtl_staging as stage WRITE, dimGene WRITE, dimGene as gene WRITE;
-                     CALL qtl_populate_fact(%s, %s);
+                     CALL qtl_populate_fact_qtl(%s, %s);
                      UNLOCK TABLES;", tissue_id, source_id)
 }
-db_query <- function (query, username = "nickburns", host = "biocvisg0.otago.ac.nz", db = "eQTL_dw") {
+
+db_query <- function (query, username = "etl_user", host = "localhost", db = "eQTL_dw") {
     execute <- sprintf('mysql -u %s -h %s -D %s -e "%s"',
                        username, host, db, query)
     return(execute)
@@ -81,6 +89,12 @@ toggle_config("foreign_key_checks", state = 0)
 toggle_config("sql_log_bin", state = 0)
 toggle_config("unique_checks", state = 0)
 
+# Get dimTissue information
+conn <- dbConnect(DBI::dbDriver('MySQL'), user=mysql_user, password=mysql_password, database="eQTL_dw")
+dimTissue <- dbGetQuery(conn, "SELECT *, LEFT(SMTSD, 18) as 'stub' FROM eQTL_dw.dimTissue;")
+dimTissue$stub <- gsub(" - ", " ", dimTissue$stub)
+dbDisconnect(conn)
+
 for (eQTL_file in eqtl_files) {
     
     print(sprintf("-------------    %s    -------------", eQTL_file))
@@ -89,7 +103,12 @@ for (eQTL_file in eqtl_files) {
     
     # extract tissue name
     tissue <- strip_suffix(eQTL_file)
-
+    
+    # Match tissue to tissue_id
+    # Match file suffix (tissue) with dimTissue.SMTSD
+    # The first 18 characters of dimTissue.SMTSD have been extracted for this match
+    tissue_id <- map_tissue(tissue)
+    
     # load eQTL data in staging table
     print("    ... bulk load into staging")
     system(db_query(reset_staging()))
@@ -97,7 +116,7 @@ for (eQTL_file in eqtl_files) {
     db_commit()
     
     # populate factQTL...
-    
+    system(db_query(pop_fact(tissue_id, 1)))
     
     # informational only
     lcl_end <- Sys.time()

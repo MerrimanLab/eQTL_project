@@ -38,7 +38,7 @@ parse_snp <- function (rsid) {
 #          specifies whether gene or rsid passed in
 # Output:
 #    data.table of resulting data
-browse <- function (target, type = "gene") {
+browse_qtls <- function (target, type = "gene") {
     
     query <- function () {
         
@@ -46,7 +46,6 @@ browse <- function (target, type = "gene") {
                 sprintf("
                         SELECT
                             dimGene.gene_symbol,
-                            dimTissue.SMTS,
                             factQTL.chromosome,
                             factQTL.build_37_pos,
                             factQTL.A1,
@@ -54,8 +53,7 @@ browse <- function (target, type = "gene") {
                             factQTL.pvalue
                         FROM factQTL 
                             INNER JOIN dimGene ON factQTL.gene_id = dimGene.gene_id
-                            INNER JOIN dimTissue on factQTL.tissue_id = dimTissue.tissue_id
-                        WHERE dimGene.gene_symbol = '%s';", target)
+                        WHERE dimGene.gene_symbol = '%s' AND build_37_pos > 50;", target)
         } else {
             ## need to do more here to turn RSID into chr, pos
             snp_info <- parse_snp(target)

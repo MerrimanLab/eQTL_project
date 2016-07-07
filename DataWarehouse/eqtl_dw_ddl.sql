@@ -135,7 +135,7 @@ create table factQTL
     foreign key (tissue_id) references dimTissue (tissue_id),
     foreign key (source_id) references dimDataSource (source_id)
 );
-#create index idx_qtl_gene_tissue on factQTL (gene_id, tissue_id);  # query based on gene-expression
+#create index idx_qtl_gene_tissue on factQTL (gene_id, tissue_id) using hash;  # query based on gene-expression
 # create index idx_qtl_snp on factQTL (chromosome, build_37_pos);   # query based on snp
 
 # factExpression  

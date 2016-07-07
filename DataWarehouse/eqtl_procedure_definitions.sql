@@ -5,7 +5,7 @@ drop procedure if exists qtl_reset_staging;
 delimiter //
 create procedure qtl_reset_staging()
 begin
-	truncate eqtl_staging;
+	truncate staging_qtl;
 end //
 delimiter ;
 
@@ -38,8 +38,7 @@ begin
                 tstat,
                 pvalue,
                 lcl_tissue as 'tissue_id'
-			from eqtl_staging
-            where pvalue < 0.01
+			from staging_qtl
         ) as stage
         inner join (
 			select distinct ensembl_id, gene_id
