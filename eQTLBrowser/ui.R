@@ -19,12 +19,24 @@ shinyUI(fluidPage(
         br(),
         hr(),
         
-        p("Search eQTLs for:", class = "boldtext"),
-        textInput("txt_query", label = "", placeholder = "example: ABCG2"),
-        radioButtons("radio_query", label = "", choices = c("snp" = "snp", "gene" = "gene")),
+        p("Gene search", class = "boldtext"),
+        p("Insert a gene name below to browse eQTLs and gene expression data.", class = "standardtext"),
+        textInput("txt_gene_query", label = "", placeholder = "example: ABCG2"),
         br(),
         
-        actionButton("btn_query", label = "Search", class = "button")
+        actionButton("btn_browse", label = "Search", class = "button"),
+        
+        br(),
+        hr(),
+        p("SNP search", class = "boldtext"),
+        p("Insert a SNP name to identify the genes for which there are relevant eQTL results."),
+        textInput("txt_snp_query", label = "", placeholder = "example: rs9930506"),
+        br(),
+        actionButton("btn_snp", label = "Search", class = "button"),
+        br(),
+        br(),
+        uiOutput("ui_message"),
+        uiOutput("ui_gene_list")
     ),
     mainPanel(
         # TO DO: add hover functionality to this

@@ -15,19 +15,15 @@ source("eqtl_library.R")
 
 shinyServer(function(input, output) {
     
-    observeEvent(input$btn_query, {
-        
-        lcl_gene <- input$txt_query
-        
+    dimTissue <- lookup_tissues()
+    
+    display_results <- function (lcl_gene, data_) {
         output$plt_panel_main <- renderPlot({
-            ggplot(browse_qtls(lcl_gene), aes(x = build_37_pos / 1000000, y = -log10(pvalue+1e-20))) +
-                geom_point(colour = "dodgerblue", alpha = 0.5) +
-                ylab("-log10( pvalue )") + xlab("position (MB)") + ggtitle(sprintf("%s loci", lcl_gene)) +
-                theme_minimal()
+            display_eqtls(data_)
         })
         
         output$plt_panel_thumb <- renderPlot({
-                
+            
             ggplot(dummy_data(lcl_gene), aes(x = genotype, y = expression, group = genotype)) +
                 geom_boxplot(colour = "darkgrey", fill = "darkgrey", alpha = 0.1) +
                 geom_jitter(colour = "darkgrey", alpha = 0.1) +
@@ -36,13 +32,42 @@ shinyServer(function(input, output) {
         
         output$plt_panel_bottom <- renderPlot({
             
-            ggplot(browse_expression(lcl_gene), aes(x = SMTSD, y = rpkm, group = SMTSD)) +
-                geom_boxplot(aes(colour = smts, fill = smts), alpha = 0.5) +
-                theme_minimal() +
-                xlab("") +
-                theme(axis.text.x = element_text(angle = 60, vjust = 0.7))
+            display_expression(lcl_gene)
             
         })
-        #output$tbl_eqtls <- renderDataTable({data})
+        output$tbl_eqtls <- renderDataTable({data_[order(pvalue, decreasing = FALSE)]})
+    }
+    
+    observeEvent(input$btn_browse, {
+        
+        lcl_gene <- input$txt_gene_query
+        data_ <- browse_qtls(lcl_gene, dimTissue)
+        
+        display_results(lcl_gene, data_)
+        
+    })
+    
+    observeEvent(input$btn_snp, {
+        
+        lcl_snp <- input$txt_snp_query
+        snp_coords <- glida::queryUCSC(glida::updatePositions(lcl_snp))
+        genes <- browse_snps(snp_coords)
+        
+        gene_list <- genes$gene_symbol
+        names(gene_list) <- genes$gene_symbol
+        
+        output$ui_message <- renderUI({
+            p(sprintf("The following genes display eQTLs for positions nearby %s:", lcl_snp))
+        })
+        output$ui_gene_list <- renderUI({
+                radioButtons("rad_genes", label = "", choices = gene_list)
+        })
+    })
+    
+    observeEvent(input$rad_genes, {
+        lcl_gene <- input$rad_genes
+        data_ <- browse_qtls(lcl_gene, dimTissue)
+        
+        display_results(lcl_gene, data_)
     })
 })
