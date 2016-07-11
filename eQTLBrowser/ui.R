@@ -42,7 +42,7 @@ shinyUI(fluidPage(
         # TO DO: add hover functionality to this
         tags$div(
             tags$div(
-                plotOutput("plt_panel_main"),
+                plotOutput("plt_panel_main", click = "plot_click"),
                 class = "plot_main"
             ),
             tags$div(

@@ -189,16 +189,21 @@ display_eqtls <- function (data_) {
     
     gene_ <- unique(data_[, gene_symbol])
     chr_ <- unique(data_[, chromosome])
+    
+    # Formatting and variable creation
+    # These are niceties to simplify the plotting and the interactive on_click
     data_[, POS := build_37_pos]
+    data_[, position := build_37_pos / 1000000]
+    data_[, association := -log10(pvalue + 1e-20)]
     
     genes_in_region <- get_genes(data_)
     
-    viz <- ggplot(data_, aes(x = POS / 1000000, y = -log10(pvalue+1e-20))) +
+    viz <- ggplot(data_, aes(x = position, y = association)) +
         geom_point(aes(shape = factor(smts), 
                        size = 1., 
-                       alpha = sqrt(1 / (pvalue + 1e-20))),    # sqrt(pchisq(-log10(pvalue + 1e-20), 20))
+                       alpha = sqrt(1 / (pvalue + 1e-20))),
                    colour = "dodgerblue") +
-        ylab("-log10( pvalue )") + xlab(sprintf("CHR%s position (MB)", chr_)) + ggtitle(sprintf("%s loci", gene_)) +
+        ylab("-log10( pvalue )") + xlab(sprintf("CHR%s position (MB)", chr_)) + ggtitle(sprintf("%s locus", gene_)) +
         guides(size = "none", alpha = "none") +
         scale_shape_discrete(name = "Top-ranked tissues") +
         theme_minimal()
@@ -215,6 +220,7 @@ display_expression <- function (gene_) {
         geom_boxplot(aes(colour = smts, fill = smts), alpha = 0.5) +
         theme_minimal() +
         xlab("") +
+        ggtitle(sprintf("Gene Expression: %s", gene_)) +
         theme(axis.text.x = element_text(angle = 60, hjust = 1))
     
 }

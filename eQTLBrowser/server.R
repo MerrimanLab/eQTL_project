@@ -28,6 +28,8 @@ shinyServer(function(input, output) {
                 geom_boxplot(colour = "darkgrey", fill = "darkgrey", alpha = 0.1) +
                 geom_jitter(colour = "darkgrey", alpha = 0.1) +
                 theme_minimal()
+            
+            
         })
         
         output$plt_panel_bottom <- renderPlot({
@@ -35,7 +37,16 @@ shinyServer(function(input, output) {
             display_expression(lcl_gene)
             
         })
-        output$tbl_eqtls <- renderDataTable({data_[order(pvalue, decreasing = FALSE)]})
+        #output$tbl_eqtls <- renderDataTable({data_[order(pvalue, decreasing = FALSE)]})
+        output$tbl_eqtls <- renderDataTable({
+            snp_info <- if (!is.null(input$plot_click)) {
+                nearPoints(data_, input$plot_click)
+            } else NULL
+            
+            print(snp_info)
+            print(sprintf("input$plot_click returns: %s", input$plot_click))
+            return (snp_info)
+        })
     }
     
     observeEvent(input$btn_browse, {
