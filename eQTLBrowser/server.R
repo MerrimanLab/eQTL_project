@@ -43,8 +43,10 @@ shinyServer(function(input, output) {
                 nearPoints(data_, input$plot_click)
             } else NULL
             
-            print(snp_info)
-            print(sprintf("input$plot_click returns: %s", input$plot_click))
+            if (! is.null(snp_info)) {
+                snp_info <- all_snp_info(snp_info)    
+            }
+            
             return (snp_info)
         })
     }

@@ -224,3 +224,18 @@ display_expression <- function (gene_) {
         theme(axis.text.x = element_text(angle = 60, hjust = 1))
     
 }
+
+all_snp_info <- function (snp) {
+    conn <- database()
+    results <- data.table(dbGetQuery(conn, sprintf("
+                                     select f.chromosome, f.build_37_pos, g.gene_symbol, f.pvalue
+                                    from factQTL f
+                                      inner join dimGene g on g.gene_id = f.gene_id
+                                    where f.build_37_pos = %s
+                                      and f.chromosome = %s;
+                                     ", snp$build_37_pos, snp$chromosome)))
+    database(conn)
+    
+    results <- results[, .(p.value = min(pvalue)), by = c("chromosome", "build_37_pos", "gene_symbol")][order(p.value, decreasing = FALSE)]
+    return (results)
+}
