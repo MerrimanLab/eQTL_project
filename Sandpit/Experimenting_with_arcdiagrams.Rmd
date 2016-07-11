@@ -1,0 +1,46 @@
+---
+title: "ArcDiagrams"
+author: "Nick Burns"
+date: "11 July 2016"
+output: html_document
+---
+
+My plan is to visualise SNP-gene interactions using an arc diagram. Here I am simply paying around with the arcdiagram package to see how easy it will be to plug into the eQTLBrowser. This play will be largely based on the vignette: http://gastonsanchez.com/software/arcdiagram_introduction.pdf
+
+There are a whole lot of other packages I could use for this (see ggbio, gviz, r4rna...), but all of these seem based on more complex data strucures. I love that arcdiagram simply takes a matrix. If I was really getting adventurous, I might like to look at this: http://www.r-bloggers.com/network-visualization-part-3-hive-plots/
+
+The other thing I should really look at is ggplot's geom_path.
+
+```{r}
+library(devtools)
+
+install_github("gastonstat/arcdiagram")
+library(arcdiagram)
+```
+
+Let's look at what the data looks like:
+
+```{r}
+star_graph <- graph.star(8, mode = "out")
+V(star_graph)$name = paste("node", 1:vcount(star_graph), sep = "-")
+
+star_edges = get.edgelist(star_graph)
+star_edges
+class(star_edges)
+```
+
+This is great news! It literally takes a 2xN matrix. Too good! It really is as easy as the vignette says. Let's plot this star_graph, and then see if I can also change the weightings.
+
+```{r}
+arcplot(star_edges, lwd.arcs = sample(4, 10, replace = TRUE))
+```
+
+Cool - I think this is going to be really straight forward :)
+
+and a full example that has everything I need:
+
+```
+# another arc diagram
+arcplot(lab, lwd.arcs = 2 * E(glab)$weight, cex.nodes = lab_degree,
+col.nodes = cols, bg.nodes = cols, show.nodes = TRUE)
+```
