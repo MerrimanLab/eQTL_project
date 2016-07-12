@@ -10,6 +10,7 @@ library(RMySQL)
 library(glida)
 library(ggplot2)
 library(data.table)
+library(gridExtra)
 source("eqtl_library.R")
 
 # for testing only:
@@ -83,11 +84,15 @@ shinyServer(function(input, output) {
         long_range_qtls <- qtl_network(chr_, start_, end_)
         
         output$plt_gwas <- renderPlot({
-            if (input$sld_qtl_threshold > 0) {
-                    display_qtl_network(display_gwas(gwas_data_), long_range_qtls)
-            } else {
-                display_gwas(gwas_data_)
-            }
+            display_gwas(gwas_data_) + xlim(start_ / 1000000, end_ / 1000000)
         })
+        output$plt_qtl_network <- renderPlot({
+            viz <- display_eqtls(long_range_qtls[-log10(pvalue) > input$sld_qtl_threshold], 
+                          show_genes = FALSE, show_tissues = FALSE, alpha_pvalues = FALSE, show_title = FALSE)
+            
+            display_qtl_network(viz, long_range_qtls[-log10(pvalue) > input$sld_qtl_threshold], show_endpoint = FALSE) +
+                xlim(start_ / 1000000, end_ / 1000000)
+        })
+
     })
 })

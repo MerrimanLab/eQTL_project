@@ -105,6 +105,10 @@ shinyUI(fluidPage(
                     plotOutput("plt_gwas", click = "gwas_click"),
                     class = "plot_main"
                 ),
+                tags$div(
+                    plotOutput("plt_qtl_network"),
+                    class = "plot_bottom"
+                ),
                 
                 value = 2
             ),

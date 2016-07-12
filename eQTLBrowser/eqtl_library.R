@@ -199,7 +199,8 @@ get_genes <- function (data_) {
     
     return (genes_in_region)
 }
-display_eqtls <- function (data_) {
+display_eqtls <- function (data_, show_genes = TRUE, show_tissues = TRUE, alpha_pvalues = TRUE,
+                           show_title = TRUE) {
     
     gene_ <- unique(data_[, gene_symbol])
     chr_ <- unique(data_[, chromosome])
@@ -213,16 +214,20 @@ display_eqtls <- function (data_) {
     genes_in_region <- get_genes(data_)
     
     viz <- ggplot(data_, aes(x = position, y = association)) +
-        geom_point(aes(shape = factor(smts), 
-                       size = 1., 
-                       alpha = sqrt(1 / (pvalue + 1e-20))),
-                   colour = "dodgerblue") +
-        ylab("-log10( pvalue )") + xlab(sprintf("CHR%s position (MB)", chr_)) + ggtitle(sprintf("%s locus", gene_)) +
-        guides(size = "none", alpha = "none") +
-        scale_shape_discrete(name = "Top-ranked tissues") +
+        geom_point(aes(shape = ifelse(show_tissues, factor(smts), 'a')),
+                   alpha = ifelse(alpha_pvalues, sqrt(1 / (data_[,pvalue] + 1e-20)), 0.3),
+                   colour = "darkblue") +
+        ylab("-log10( pvalue )") + xlab(sprintf("CHR%s position (MB)", chr_)) + 
+        ggtitle(ifelse(show_title, sprintf("%s locus", gene_), "")) +
+        guides(size = "none", alpha = "none", shape = ifelse(show_tissues, NULL, "none")) +
         theme_minimal()
     
-    viz <- glida::geneAnnotation(viz, genes_in_region)
+    if (show_genes) {
+        viz <- glida::geneAnnotation(viz, genes_in_region)
+    }
+    if (show_tissues) {
+        viz <- viz + scale_shape_discrete(name = "Top-ranked tissues")
+    }
     
     return (viz)
     
@@ -275,7 +280,7 @@ all_snp_info <- function (snp) {
 #### GWAS : QTL Functions  
 
 extract_gwas <- function (file_, chr_, start_, end_) {
-    print("reading in gwas data")
+    
     gwas_ <- fread(file_)
     
     return (gwas_[(CHR == chr_ & POS >= start_ & POS <= end_)])
@@ -303,13 +308,13 @@ display_gwas <- function (data_) {
     
 }
 
-display_qtl_network <- function (viz, long_range_qtls) {
+display_qtl_network <- function (viz, long_range_qtls, show_endpoint = TRUE) {
     
     layer_ <- viz +
         geom_curve(data = long_range_qtls,
                    aes(gene_midpoint / 1000000, xend = build_37_pos / 1000000, 
-                       y = -10, yend = -log10(pvalue),
-                       alpha = 1 / pvalue),
+                       y = -10, yend = 3, #-log10(pvalue + 1e-20), 10),
+                       alpha = 1 / (pvalue + 1e-20)),
                    colour = "darkgrey", curvature = 0.3) +
         geom_text(data = unique(long_range_qtls[, .(gene_symbol, gene_midpoint)]),
                   aes(x = gene_midpoint / 1000000, y = -10, label = gene_symbol)) +
