@@ -73,28 +73,21 @@ shinyServer(function(input, output) {
     observeEvent(input$btn_gwas, {
         
         file_ <- input$gwas_file
-        print(file_$datapath)
+        
         chr_ <- as.integer(input$gwas_chr)
         start_ <- as.integer(input$gwas_start)
         end_ <- as.integer(input$gwas_end)
         
         gwas_data_ <- extract_gwas(file_$datapath, chr_, start_, end_)
-        print("got gwas data")
         
         long_range_qtls <- qtl_network(chr_, start_, end_)
-        print(head(long_range_qtls))
         
         output$plt_gwas <- renderPlot({
-            display_gwas(gwas_data_) + 
-                geom_curve(data = long_range_qtls,
-                           aes(gene_midpoint / 1000000, xend = build_37_pos / 1000000, 
-                               y = -10, yend = -log10(pvalue),
-                               alpha = 1 / pvalue),
-                           colour = "darkgrey", curvature = 0.3) +
-                geom_text(data = unique(long_range_qtls[, .(gene_symbol, gene_midpoint)]),
-                          aes(x = gene_midpoint / 1000000, y = -10, label = gene_symbol)) +
-                guides(alpha = "none") +
-                theme_minimal()
+            if (input$sld_qtl_threshold > 0) {
+                    display_qtl_network(display_gwas(gwas_data_), long_range_qtls)
+            } else {
+                display_gwas(gwas_data_)
+            }
         })
     })
 })

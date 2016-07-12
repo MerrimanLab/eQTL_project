@@ -47,6 +47,11 @@ shinyUI(fluidPage(
               columns: (CHR, POS, P).", class = "standardtext"),
             br(),
             fileInput("gwas_file", p("GWAS File: ", class = "boldtext")),
+            hr(),
+            p("QTL Threshold", class = "boldtext"),
+            p("Adjust the -log10( pvalue ) threshold below. QTLs below this threshold will not be displayed.
+              Note: setting this to zero will hide the QTL network.", class = "standardtext"),
+            sliderInput("sld_qtl_threshold", label = "", min = 0, max = 10, value = 4),
             br(),
             hr(),
             p("GWAS / eQTL Search: ", class = "boldtext"),

@@ -302,3 +302,19 @@ display_gwas <- function (data_) {
     return (viz)
     
 }
+
+display_qtl_network <- function (viz, long_range_qtls) {
+    
+    layer_ <- viz +
+        geom_curve(data = long_range_qtls,
+                   aes(gene_midpoint / 1000000, xend = build_37_pos / 1000000, 
+                       y = -10, yend = -log10(pvalue),
+                       alpha = 1 / pvalue),
+                   colour = "darkgrey", curvature = 0.3) +
+        geom_text(data = unique(long_range_qtls[, .(gene_symbol, gene_midpoint)]),
+                  aes(x = gene_midpoint / 1000000, y = -10, label = gene_symbol)) +
+        guides(alpha = "none") +
+        theme_minimal()
+    
+    return (layer_)
+}
