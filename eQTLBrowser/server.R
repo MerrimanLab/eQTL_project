@@ -18,18 +18,9 @@ shinyServer(function(input, output) {
     dimTissue <- lookup_tissues()
     
     display_results <- function (lcl_gene, data_) {
+        
         output$plt_panel_main <- renderPlot({
             display_eqtls(data_)
-        })
-        
-        output$plt_panel_thumb <- renderPlot({
-            
-            ggplot(dummy_data(lcl_gene), aes(x = genotype, y = expression, group = genotype)) +
-                geom_boxplot(colour = "darkgrey", fill = "darkgrey", alpha = 0.1) +
-                geom_jitter(colour = "darkgrey", alpha = 0.1) +
-                theme_minimal()
-            
-            
         })
         
         output$plt_panel_bottom <- renderPlot({
@@ -55,8 +46,8 @@ shinyServer(function(input, output) {
         
         lcl_gene <- input$txt_gene_query
         data_ <- browse_qtls(lcl_gene, dimTissue)
-        
-        display_results(lcl_gene, data_)
+
+        display_results(lcl_gene, data_) 
         
     })
     

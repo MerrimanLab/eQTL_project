@@ -23,9 +23,8 @@ shinyUI(fluidPage(
         p("Insert a gene name below to browse eQTLs and gene expression data.", class = "standardtext"),
         textInput("txt_gene_query", label = "", placeholder = "example: ABCG2"),
         br(),
-        
+        br(),
         actionButton("btn_browse", label = "Search", class = "button"),
-        
         br(),
         hr(),
         p("SNP search", class = "boldtext"),
@@ -46,9 +45,8 @@ shinyUI(fluidPage(
                 class = "plot_main"
             ),
             tags$div(
-                plotOutput("plt_panel_thumb"), 
-                class = "plot_thumb"
-            ), 
+                uiOutput("sld_pval")
+            ),
             tags$div(
                 plotOutput("plt_panel_bottom"),
                 class = "plot_bottom"

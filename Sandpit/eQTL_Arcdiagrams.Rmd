@@ -1,0 +1,76 @@
+---
+title: "eqTL_ArcDiagrams"
+author: "Nick Burns"
+date: "12 July 2016"
+output: html_document
+---
+
+I really like the arcdiagram package. Here, I will explore the use of it to plot eQTL relationships.
+
+```{r}
+library(devtools)
+# install_github("gastonstat/arcdiagram")
+library(arcdiagram)
+
+setwd("~/Documents/GitHub/eQTL_project/Sandpit/")
+source("../eQTLBrowser/eqtl_library.R")
+
+dimTissue <- lookup_tissues()
+fto_locus <- browse_qtls("FTO", dimTissue)
+
+long_range_qtls <- qtl_network(fto_locus)
+```
+
+With the data in hand, let's start to build an ardiagram.
+
+```{r}
+edges <- floor(as.matrix(long_range_qtls[, .(gene_midpoint, build_37_pos)]) + 0.5)
+edge_weight <- long_range_qtls[, pvalue]
+nodes <- long_range_qtls[, gene_symbol]
+
+arcplot(edges)
+```
+
+Cool, now let's make sure it is in chromosomal order of the genes
+
+```{r}
+arcplot(edges[order(edges[, 1]), ])
+```
+
+Great, now I need to label the genes.
+
+```{r}
+node_ids <- as.integer(edges[, 1])
+node_ids <- long_range_qtls[match(node_ids, gene_midpoint), gene_symbol]
+
+new_edges <- cbind(node_ids, as.character(edges[, 2]))
+
+arcplot(new_edges[order(edges[, 2]), ], show.labels = FALSE)
+```
+
+
+Damn this doesn't work - let's try Matt's idea of drawing circles
+
+```{r}
+display_eqtls(data_) + 
+    geom_segment(data = long_range_qtls[pvalue < 0.001],
+               aes(gene_midpoint / 1000000, xend = build_37_pos / 1000000, 
+                   y = 1, yend = 2),
+                   colour = "darkgrey", alpha = 0.3) +
+    geom_text(data = unique(long_range_qtls[, .(gene_symbol, gene_midpoint)]),
+              aes(x = gene_midpoint / 1000000, y = 1, label = gene_symbol)) +
+    theme_minimal()
+```
+
+
+```{r}
+display_eqtls(data_) + 
+    geom_curve(data = long_range_qtls[pvalue < 0.0001],
+               aes(gene_midpoint / 1000000, xend = build_37_pos / 1000000, 
+                   y = 1, yend = -log10(pvalue),
+                   alpha = 1 / pvalue),
+                   colour = "darkgrey", curvature = 0.3) +
+    geom_text(data = unique(long_range_qtls[, .(gene_symbol, gene_midpoint)]),
+              aes(x = gene_midpoint / 1000000, y = 1, label = gene_symbol)) +
+    theme_minimal()
+```

@@ -54,7 +54,7 @@ browse_qtls <- function (target, dimTissue, type = "gene") {
                             factQTL.tissue_id
                         FROM factQTL 
                             INNER JOIN dimGene ON factQTL.gene_id = dimGene.gene_id
-                        WHERE dimGene.gene_symbol = '%s' AND build_37_pos > 50;", target)
+                        WHERE dimGene.gene_symbol = '%s';", target)
         } else {
             ## need to do more here to turn RSID into chr, pos
             snp_info <- parse_snp(target)
@@ -133,15 +133,27 @@ browse_expression <- function (target) {
     return (results[!is.na(gene_symbol)])
 }
 
-browse_snps <- function (snp) {
+# qtl_network
+# this will change slightly, but the idea is there.
+# having played with this, it doesn't make sense to do this
+# between eQTL loci, but instead it should take a ref locus
+# of GWAS hits and display the eQTLs to all genes.
+# Code to visualise this is in eQTL_Arcdiagrams.Rmd
+qtl_network <- function (ref_locus) {
     query <- function () {
         lcl_query <- sprintf("
-                             SELECT DISTINCT g.gene_symbol
-                             FROM factQTL f
-                               INNER JOIN dimGene g ON g.gene_id = f.gene_id
-                             WHERE f.build_37_pos BETWEEN %s AND %s
-                               AND f.chromosome = %s
-                             ", snp$POS - 100, snp$POS + 100, gsub("chr", "", snp$CHR))
+        SELECT 
+            g1.gene_symbol, 
+            (g1.start_pos + g1.end_pos) / 2 as 'gene_midpoint', 
+            f1.chromosome, 
+            f1.build_37_pos, 
+            f1.pvalue
+        FROM factQTL_new f1
+          INNER JOIN dimGene g1 ON g1.gene_id = f1.gene_id
+        WHERE f1.chromosome = %s
+          AND g1.gene_symbol != '%s'
+          AND f1.build_37_pos IN (%s) ;
+        ", ref_locus[1, chromosome], ref_locus[1, gene_symbol], paste0(ref_locus[pvalue < 0.0001, build_37_pos], collapse = ", "))
         return (lcl_query)
     }
     conn <- database()
