@@ -237,6 +237,23 @@ display_expression <- function (gene_) {
     
 }
 
+# browse_by_snp
+# given a SNP (CHr, Pos, SNP, strand), find all nearby genes wtih eQTLs.
+browse_by_snp <- function (snp) {
+    conn <- database()
+    results <- data.table(dbGetQuery(conn, sprintf("
+                                     select distinct g.gene_symbol
+                                    from factQTL f
+                                      inner join dimGene g on g.gene_id = f.gene_id
+                                    where f.build_37_pos BETWEEN %s ANd %s
+                                      and f.chromosome = %s;
+                                     ", snp$POS - 50, snp$POS + 50, 
+                                                   gsub("chr", "", snp$CHR))))
+    database(conn)
+    
+    return (results)
+}
+
 all_snp_info <- function (snp) {
     conn <- database()
     results <- data.table(dbGetQuery(conn, sprintf("

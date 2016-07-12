@@ -28,18 +28,8 @@ shinyServer(function(input, output) {
             display_expression(lcl_gene)
             
         })
-        #output$tbl_eqtls <- renderDataTable({data_[order(pvalue, decreasing = FALSE)]})
-        output$tbl_eqtls <- renderDataTable({
-            snp_info <- if (!is.null(input$plot_click)) {
-                nearPoints(data_, input$plot_click)
-            } else NULL
-            
-            if (! is.null(snp_info)) {
-                snp_info <- all_snp_info(snp_info)    
-            }
-            
-            return (snp_info)
-        })
+        output$tbl_eqtls <- renderDataTable({data_[order(pvalue, decreasing = FALSE)]})
+        
     }
     
     observeEvent(input$btn_browse, {
@@ -55,7 +45,7 @@ shinyServer(function(input, output) {
         
         lcl_snp <- input$txt_snp_query
         snp_coords <- glida::queryUCSC(glida::updatePositions(lcl_snp))
-        genes <- browse_snps(snp_coords)
+        genes <- browse_by_snp(snp_coords)
         
         gene_list <- genes$gene_symbol
         names(gene_list) <- genes$gene_symbol

@@ -14,8 +14,6 @@ shinyUI(fluidPage(
     headerPanel(""),
     sidebarPanel(
         h2("eQTL Browser", class = "heading"),
-        hr(),
-        p("Some instructions will go here", class = "standardtext"),
         br(),
         hr(),
         
@@ -27,32 +25,66 @@ shinyUI(fluidPage(
         actionButton("btn_browse", label = "Search", class = "button"),
         br(),
         hr(),
-        p("SNP search", class = "boldtext"),
-        p("Insert a SNP name to identify the genes for which there are relevant eQTL results."),
-        textInput("txt_snp_query", label = "", placeholder = "example: rs9930506"),
-        br(),
-        actionButton("btn_snp", label = "Search", class = "button"),
-        br(),
-        br(),
-        uiOutput("ui_message"),
-        uiOutput("ui_gene_list")
+        
+        conditionalPanel(
+            condition = "input.conditionedPanels == 1",
+            p("SNP search", class = "boldtext"),
+            p("Insert a SNP name to identify the genes for which there are relevant eQTL results."),
+            textInput("txt_snp_query", label = "", placeholder = "example: rs9930506"),
+            br(),
+            actionButton("btn_snp", label = "Search", class = "button"),
+            br(),
+            br(),
+            uiOutput("ui_message"),
+            uiOutput("ui_gene_list")
+        ),
+        conditionalPanel(
+            condition = "input.conditionedPanels == 2",
+            p("GWAS Summary Dataset", class = "boldtext")
+        )
+        
     ),
     mainPanel(
-        # TO DO: add hover functionality to this
-        tags$div(
-            tags$div(
-                plotOutput("plt_panel_main", click = "plot_click"),
-                class = "plot_main"
+        tabsetPanel(
+            
+            # eQTL and gene expression panel
+            tabPanel(
+                
+                h4("eQTL and Gene Expression"),
+                br(),
+                br(),
+                tags$div(
+                    tags$div(
+                        plotOutput("plt_panel_main", click = "plot_click"),
+                        class = "plot_main"
+                    ),
+                    tags$div(
+                        uiOutput("sld_pval")
+                    ),
+                    tags$div(
+                        plotOutput("plt_panel_bottom"),
+                        class = "plot_bottom"
+                    ), class = "plot_panel"
+                ),
+                br(),
+                dataTableOutput("tbl_eqtls"),
+                
+                value = 1    # this is for the conditional sidebar panels
             ),
-            tags$div(
-                uiOutput("sld_pval")
+            
+            # GWAS : eQTL panel
+            tabPanel(
+                h4("eQTL and GWAS"),
+                
+                value = 2
             ),
-            tags$div(
-                plotOutput("plt_panel_bottom"),
-                class = "plot_bottom"
-            ), class = "plot_panel"
-        ),
-        br(),
-        dataTableOutput("tbl_eqtls")
+            
+            # download datasets
+            tabPanel(
+                h4("Download Datasets")
+            ),
+            
+            id = "conditionedPanels"    # this is the main id for the conditional sidebar panels
+        )
     )
 ))
