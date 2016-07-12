@@ -17,17 +17,18 @@ shinyUI(fluidPage(
         br(),
         hr(),
         
-        p("Gene search", class = "boldtext"),
-        p("Insert a gene name below to browse eQTLs and gene expression data.", class = "standardtext"),
-        textInput("txt_gene_query", label = "", placeholder = "example: ABCG2"),
-        br(),
-        br(),
-        actionButton("btn_browse", label = "Search", class = "button"),
-        br(),
-        hr(),
-        
         conditionalPanel(
             condition = "input.conditionedPanels == 1",
+            
+            p("Gene search", class = "boldtext"),
+            p("Insert a gene name below to browse eQTLs and gene expression data.", class = "standardtext"),
+            textInput("txt_gene_qtl", label = "", placeholder = "example: ABCG2"),
+            br(),
+            br(),
+            actionButton("btn_browse", label = "Search", class = "button"),
+            br(),
+            hr(),
+            
             p("SNP search", class = "boldtext"),
             p("Insert a SNP name to identify the genes for which there are relevant eQTL results."),
             textInput("txt_snp_query", label = "", placeholder = "example: rs9930506"),
@@ -40,7 +41,26 @@ shinyUI(fluidPage(
         ),
         conditionalPanel(
             condition = "input.conditionedPanels == 2",
-            p("GWAS Summary Dataset", class = "boldtext")
+            p("GWAS Summary Dataset", class = "boldtext"),
+            br(),
+            p("GWAS summary datasets can be uploaded below. Each file should contain the folowing
+              columns: (CHR, POS, P).", class = "standardtext"),
+            br(),
+            fileInput("gwas_file", p("GWAS File: ", class = "boldtext")),
+            br(),
+            hr(),
+            p("GWAS / eQTL Search: ", class = "boldtext"),
+            br(),
+            p("Chromosome: ", class = "standardtext"),
+            textInput("gwas_chr", label = "", placeholder = "example: 12"),
+            br(),
+            p("Region start: ", class = "standardtext"),
+            textInput("gwas_start", label = "", placeholder = "example: 1000000"),
+            br(),
+            p("Region end: ", class = "standardtext"),
+            textInput("gwas_end", label = "", placeholder = "example: 2000000"),
+            br(),
+            actionButton("btn_gwas", label = "Search", class = "button")
         )
         
     ),
@@ -75,6 +95,11 @@ shinyUI(fluidPage(
             # GWAS : eQTL panel
             tabPanel(
                 h4("eQTL and GWAS"),
+                br(),
+                tags$div(
+                    plotOutput("plt_gwas", click = "gwas_click"),
+                    class = "plot_main"
+                ),
                 
                 value = 2
             ),

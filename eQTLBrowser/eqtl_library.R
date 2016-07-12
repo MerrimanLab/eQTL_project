@@ -139,7 +139,8 @@ browse_expression <- function (target) {
 # between eQTL loci, but instead it should take a ref locus
 # of GWAS hits and display the eQTLs to all genes.
 # Code to visualise this is in eQTL_Arcdiagrams.Rmd
-qtl_network <- function (ref_locus) {
+# NOTE: assuming GWAS colnames (CHR, POS, P)
+qtl_network <- function (chr_, start_, end_) {
     query <- function () {
         lcl_query <- sprintf("
         SELECT 
@@ -148,12 +149,11 @@ qtl_network <- function (ref_locus) {
             f1.chromosome, 
             f1.build_37_pos, 
             f1.pvalue
-        FROM factQTL_new f1
+        FROM factQTL f1
           INNER JOIN dimGene g1 ON g1.gene_id = f1.gene_id
         WHERE f1.chromosome = %s
-          AND g1.gene_symbol != '%s'
-          AND f1.build_37_pos IN (%s) ;
-        ", ref_locus[1, chromosome], ref_locus[1, gene_symbol], paste0(ref_locus[pvalue < 0.0001, build_37_pos], collapse = ", "))
+          AND f1.build_37_pos BETWEEN %s AND %s ;
+        ", chr_, start_, end_)
         return (lcl_query)
     }
     conn <- database()
@@ -184,14 +184,16 @@ dummy_data <- function (gene, data_type = "genotype_distributions") {
 
 get_genes <- function (data_) {
     
-    gene_ <- unique(data_[, gene_symbol])
     chr_ <- unique(data_[, chromosome])
-    data_[, POS := build_37_pos]
+    
+    if (("build_37_pos" %in% colnames(data)) & (! "POS" %in% colnames(data))) {
+        data_[, POS := build_37_pos]
+    }
     
     genes_in_region <- glida::queryUCSC(
         glida::fromUCSCEnsemblGenes(chromosome = chr_,
-                                    start = data_[, min(build_37_pos)],
-                                    end = data_[, max(build_37_pos)])
+                                    start = data_[, min(POS)],
+                                    end = data_[, max(POS)])
     )
     genes_in_region <- genes_in_region[genes_in_region$geneType == "protein_coding", ]
     
@@ -245,7 +247,7 @@ browse_by_snp <- function (snp) {
                                      select distinct g.gene_symbol
                                     from factQTL f
                                       inner join dimGene g on g.gene_id = f.gene_id
-                                    where f.build_37_pos BETWEEN %s ANd %s
+                                    where f.build_37_pos BETWEEN %s AND %s
                                       and f.chromosome = %s;
                                      ", snp$POS - 50, snp$POS + 50, 
                                                    gsub("chr", "", snp$CHR))))
@@ -267,4 +269,36 @@ all_snp_info <- function (snp) {
     
     results <- results[, .(p.value = min(pvalue)), by = c("chromosome", "build_37_pos", "gene_symbol")][order(p.value, decreasing = FALSE)]
     return (results)
+}
+
+
+#### GWAS : QTL Functions  
+
+extract_gwas <- function (file_, chr_, start_, end_) {
+    print("reading in gwas data")
+    gwas_ <- fread(file_)
+    
+    return (gwas_[(CHR == chr_ & POS >= start_ & POS <= end_)])
+}
+
+display_gwas <- function (data_) {
+    
+    chr_ <- unique(data_[, CHR])
+    data_[, chromosome := CHR]
+    
+    # Formatting and variable creation
+    # These are niceties to simplify the plotting and the interactive on_click
+    data_[, position := POS / 1000000]
+    data_[, association := -log10(P + 1e-20)]
+    
+    genes_in_region <- get_genes(data_)
+    
+    viz <- ggplot(data_, aes(x = position, y = association)) +
+        geom_point(colour = "dodgerblue", alpha = 0.3) +
+        ylab("-log10( pvalue )") + xlab("position (MB)") + 
+        ggtitle(sprintf("Chromosome %s : %s MB - %s MB", chr_, min(data_[, position]), max(data_[, position]))) +
+        theme_minimal()
+    
+    return (viz)
+    
 }
