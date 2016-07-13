@@ -211,8 +211,6 @@ display_eqtls <- function (data_, show_genes = TRUE, show_tissues = TRUE, alpha_
     data_[, position := build_37_pos / 1000000]
     data_[, association := -log10(pvalue + 1e-20)]
     
-    genes_in_region <- get_genes(data_)
-    
     viz <- ggplot(data_, aes(x = position, y = association)) +
         geom_point(aes(shape = ifelse(show_tissues, factor(smts), 'a')),
                    alpha = ifelse(alpha_pvalues, sqrt(1 / (data_[,pvalue] + 1e-20)), 0.3),
@@ -223,6 +221,7 @@ display_eqtls <- function (data_, show_genes = TRUE, show_tissues = TRUE, alpha_
         theme_minimal()
     
     if (show_genes) {
+        genes_in_region <- get_genes(data_)
         viz <- glida::geneAnnotation(viz, genes_in_region)
     }
     if (show_tissues) {
@@ -309,11 +308,11 @@ display_gwas <- function (data_) {
 }
 
 display_qtl_network <- function (viz, long_range_qtls, show_endpoint = TRUE) {
-    
+    print("trying to display the qtl network...")
     layer_ <- viz +
         geom_curve(data = long_range_qtls,
                    aes(gene_midpoint / 1000000, xend = build_37_pos / 1000000, 
-                       y = -10, yend = 3, #-log10(pvalue + 1e-20), 10),
+                       y = -10, yend = -log10(pvalue + 1e-20),
                        alpha = 1 / (pvalue + 1e-20)),
                    colour = "darkgrey", curvature = 0.3) +
         geom_text(data = unique(long_range_qtls[, .(gene_symbol, gene_midpoint)]),

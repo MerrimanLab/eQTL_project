@@ -95,4 +95,25 @@ shinyServer(function(input, output) {
         })
 
     })
+    
+    # select GWAS peak and re-display the QTL network
+    observeEvent(input$gwas_peak, {
+        
+        start_ <- as.integer(input$gwas_start)
+        end_ <- as.integer(input$gwas_end)
+        chr_ <- as.integer(input$gwas_chr)
+        long_range_qtls <- qtl_network(chr_, start_, end_)
+        
+        viz <- display_eqtls(long_range_qtls[((-log10(pvalue) > input$sld_qtl_threshold) &
+                                                  (build_37_pos > (input$gwas_peak$xmin * 1000000)) &
+                                                  (build_37_pos < (input$gwas_peak$xmax * 1000000)))], 
+                             show_genes = FALSE, show_tissues = FALSE, alpha_pvalues = FALSE, show_title = FALSE)
+        
+        output$plt_qtl_network <- renderPlot({
+            display_qtl_network(viz, long_range_qtls[((-log10(pvalue) > input$sld_qtl_threshold) &
+                                                          (build_37_pos > (input$gwas_peak$xmin * 1000000)) &
+                                                          (build_37_pos < (input$gwas_peak$xmax * 1000000)))],
+                                show_endpoint = FALSE) + xlim(start_ / 1000000, end_ / 1000000)
+        })
+    })
 })
