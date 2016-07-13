@@ -199,7 +199,8 @@ get_genes <- function (data_) {
     
     return (genes_in_region)
 }
-display_eqtls <- function (data_, show_genes = TRUE, show_tissues = TRUE, alpha_pvalues = TRUE,
+display_eqtls <- function (data_, gwas_data = NULL,
+                           show_genes = TRUE, show_tissues = TRUE, alpha_pvalues = TRUE,
                            show_title = TRUE) {
     
     gene_ <- unique(data_[, gene_symbol])
@@ -211,8 +212,17 @@ display_eqtls <- function (data_, show_genes = TRUE, show_tissues = TRUE, alpha_
     data_[, position := build_37_pos / 1000000]
     data_[, association := -log10(pvalue + 1e-20)]
     
+    # weight the size of points
+    if (!is.null(gwas_data)) {
+        data_[, gwas_weight_ := weight_(gwas_data, build_37_pos), by = build_37_pos]
+    } else {
+        data_[, gwas_weight_ := 1]
+    }
+    
+    
     viz <- ggplot(data_, aes(x = position, y = association)) +
-        geom_point(aes(shape = ifelse(show_tissues, factor(smts), 'a')),
+        geom_point(aes(shape = ifelse(show_tissues, factor(smts), 'a'),
+                       size = gwas_weight_),
                    alpha = ifelse(alpha_pvalues, sqrt(1 / (data_[,pvalue] + 1e-20)), 0.3),
                    colour = "darkblue") +
         ylab("-log10( pvalue )") + xlab(sprintf("CHR%s position (MB)", chr_)) + 
@@ -322,3 +332,27 @@ display_qtl_network <- function (viz, long_range_qtls, show_endpoint = TRUE) {
     
     return (layer_)
 }
+
+nearest_neighbours <- function (ref_position, gwas) {
+    
+    dx <- as.matrix(dist(c(ref_position, gwas$POS)))
+    dx <- sort(dx[1, ], decreasing = FALSE)
+    
+    return (dx)
+}
+weighted_pvalue <- function (gwas, dx) {
+    sum(-log10(gwas$P + 1e-50) * (1 / dx))
+}
+
+weight_ <- function (gwas, x) {
+    
+    nearest_ <- function () {
+        DX <- as.matrix(dist(c(x, gwas$POS)))[1, -1]
+        
+        return (DX[order(DX, decreasing = FALSE)])
+    }
+    size_ <- sum(-log10(gwas$P) / nearest_())
+    
+    return (size_)
+}
+

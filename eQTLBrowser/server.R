@@ -107,6 +107,7 @@ shinyServer(function(input, output) {
         viz <- display_eqtls(long_range_qtls[((-log10(pvalue) > input$sld_qtl_threshold) &
                                                   (build_37_pos > (input$gwas_peak$xmin * 1000000)) &
                                                   (build_37_pos < (input$gwas_peak$xmax * 1000000)))], 
+                             gwas_data = extract_gwas(input$gwas_file$datapath, chr_, start_, end_),
                              show_genes = FALSE, show_tissues = FALSE, alpha_pvalues = FALSE, show_title = FALSE)
         
         output$plt_qtl_network <- renderPlot({
