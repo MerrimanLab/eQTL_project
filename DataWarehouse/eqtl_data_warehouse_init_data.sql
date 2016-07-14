@@ -1,4 +1,19 @@
-use eQTL_dw;
+# eQTL Datawarehouse
+# Initial Data Population Script
+#
+# Loads lookup data into staging and then dimension tables. Specifically:
+#     - file: gtex_metadata.csv -> stage_meta -> dim_tissue
+#     - file: gtex_genes.csv -> stage_gene -> dim_gene
+#
+# NOTES:
+#   1. This script should not be run automatically. Users should run each statement manually,
+#      in particular, users should review the UPDATE dim_tissue statements to see if they need to
+#      be run.
+#   2. This script only needs to be run once. After running, back up the database.
+#
+# Nick Burns
+# July 2016
+use qtldw;
 
 
 # populate meta-stagign
