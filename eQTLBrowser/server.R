@@ -114,7 +114,8 @@ shinyServer(function(input, output) {
             display_qtl_network(viz, long_range_qtls[((-log10(pvalue) > input$sld_qtl_threshold) &
                                                           (build_37_pos > (input$gwas_peak$xmin * 1000000)) &
                                                           (build_37_pos < (input$gwas_peak$xmax * 1000000)))],
-                                show_endpoint = FALSE) + xlim(start_ / 1000000, end_ / 1000000)
+                                show_endpoint = FALSE) + xlim(input$gwas_peak$xmin, input$gwas_peak$xmax)
+            #+ xlim(start_ / 1000000, end_ / 1000000)
         })
     })
 })

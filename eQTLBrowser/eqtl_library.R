@@ -214,15 +214,16 @@ display_eqtls <- function (data_, gwas_data = NULL,
     
     # weight the size of points
     if (!is.null(gwas_data)) {
+        gwas_data[is.na(P), P := 1e-50]
         data_[, gwas_weight_ := weight_(gwas_data, build_37_pos), by = build_37_pos]
     } else {
-        data_[, gwas_weight_ := 1]
+        data_[, gwas_weight_ := 0.5]
     }
-    
+    print(data_[, .(build_37_pos, gwas_weight_)])
     
     viz <- ggplot(data_, aes(x = position, y = association)) +
-        geom_point(aes(shape = ifelse(show_tissues, factor(smts), 'a'),
-                       size = gwas_weight_),
+        geom_point(aes(shape = ifelse(show_tissues, factor(smts), 'a')),
+                   size = data_[, gwas_weight_],
                    alpha = ifelse(alpha_pvalues, sqrt(1 / (data_[,pvalue] + 1e-20)), 0.3),
                    colour = "darkblue") +
         ylab("-log10( pvalue )") + xlab(sprintf("CHR%s position (MB)", chr_)) + 
@@ -344,15 +345,23 @@ weighted_pvalue <- function (gwas, dx) {
     sum(-log10(gwas$P + 1e-50) * (1 / dx))
 }
 
-weight_ <- function (gwas, x) {
+weight_ <- function (gwas, x, k = 5) {
     
     nearest_ <- function () {
         DX <- as.matrix(dist(c(x, gwas$POS)))[1, -1]
         
         return (DX[order(DX, decreasing = FALSE)])
     }
-    size_ <- sum(-log10(gwas$P) / nearest_())
     
+    dx_ <- nearest_()[1:k] 
+    idx_ <- as.integer(names(dx_))
+    
+    #size_ <- sum(-log10(gwas[idx_, P]) / dx_)
+    size_ <- -log10(  gwas[idx_, P] * (dx_ / min(dx_)))
+    #size_ <- mean(-log10(gwas[idx_, P]) / 1:10)
+    size_[is.na(size_)] <- 100
+    size_ <- (size_ - min(size_)) / (max(size_) + min(size_)) * 10
+    size_ <- mean(size_)
     return (size_)
 }
 
