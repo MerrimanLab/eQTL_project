@@ -13,7 +13,7 @@ library(data.table)
 source("eqtl_library.R")
 
 # for testing only:
-options(shiny.maxRequestSize=100*1024^2) 
+options(shiny.maxRequestSize=300*1024^2) 
 
 shinyServer(function(input, output) {
     
@@ -73,23 +73,21 @@ shinyServer(function(input, output) {
     observeEvent(input$btn_gwas, {
         
         file_ <- input$gwas_file
-        print(file_$datapath)
+        
         chr_ <- as.integer(input$gwas_chr)
         start_ <- as.integer(input$gwas_start)
         end_ <- as.integer(input$gwas_end)
         
         gwas_data_ <- extract_gwas(file_$datapath, chr_, start_, end_)
-        print("got gwas data")
         
         long_range_qtls <- qtl_network(chr_, start_, end_)
-        print(head(long_range_qtls))
         
         output$plt_gwas <- renderPlot({
             display_gwas(gwas_data_) + 
                 geom_curve(data = long_range_qtls,
                            aes(gene_midpoint / 1000000, xend = build_37_pos / 1000000, 
                                y = -10, yend = -log10(pvalue),
-                               alpha = 1 / pvalue),
+                               alpha = 1 / (pvalue + 1e-50)),
                            colour = "darkgrey", curvature = 0.3) +
                 geom_text(data = unique(long_range_qtls[, .(gene_symbol, gene_midpoint)]),
                           aes(x = gene_midpoint / 1000000, y = -10, label = gene_symbol)) +

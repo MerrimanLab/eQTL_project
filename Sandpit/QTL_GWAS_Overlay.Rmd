@@ -1,0 +1,200 @@
+---
+title: "QTL_GWAS_Overlap"
+author: "Nick Burns"
+date: "18 July 2016"
+output: html_document
+---
+
+I have a basic QTL Browser up and running. Users may query by gene, or by SNP, and view the QTL region. What I really want to be able to do is to compare / contrast / overlay QTL data with GWAS summary data. The goal is to find unexpected and interesting relationships like the FTO / IRX3 relationship (see http://www.nature.com/nature/journal/v507/n7492/full/nature13138.html). In this notebook I will begin with some very basic explorations of QTLs and summary stats from a recent obesity GWAS. We will:
+
+  1. extract regions of interest  
+  2. plot the gwas and qtls side-by-side  
+  3. try to figure out how to develop a more direct mapping between the QTLs and GWAS data.  
+  
+
+
+```{r}
+library(data.table)
+library(ggplot2)
+setwd("~/Documents/GitHub/eQTL_project/Sandpit/")
+source("../eQTLBrowser/eqtl_library.R")
+
+gwas <- fread("/mnt/DataDrive/ReseqExperiments/ReseqData/RawSummaryData/LockeSummary.txt")
+gwas
+```
+
+Just to begin with, let's plot some potentially interesting regions. These regions have been previously identified as some of the most highly-associated with obesity. First, we will get the genes for each region.
+
+```{r}
+regions <- data.table(
+    region = 1:5,
+    CHR = c(1, 1, 2, 7, 16),
+    start = c(119000000, 74000000, 187000000, 25000000, 53250000),
+    end = c(120000000, 75500000, 189000000, 26500000, 54500000)
+)
+
+library(glida)
+library(gridExtra)
+
+genes <- do.call(rbind, lapply(1:5, function (region_) {
+    tmp <- glida::queryUCSC(glida::fromUCSCEnsemblGenes(
+        chromosome = regions[region == region_, chr],
+        start = regions[region == region_, start],
+        end = regions[region == region_, end]
+    ))
+    
+    tmp$region <- region_
+    
+    return (tmp)
+}))
+
+genes <- data.table(genes)
+```
+
+To plot these regions, I need to get genomic coordinates for the SNPs in the GWAS data. Can use the glida package for this. Have chunked out this operation into 10 chunks:
+
+```{r}
+for (chunk in 0:9) {
+    print(chunk)
+    
+    row_i <- chunk * 260000 + 1
+    row_j <- row_i + 260000 - 1
+    
+    print(dim(gwas[row_i:row_j]))
+    
+    tmp_snps <- glida::queryUCSC(glida::updatePositions(gwas[row_i:row_j, SNP]))
+    print(dim(tmp_snps))
+    
+    if (chunk == 0) {
+        gwas_out <- merge(gwas, tmp_snps, by = "SNP")
+    } else {
+        gwas_out <- rbind(gwas_out, merge(gwas, tmp_snps, by = "SNP"))
+    }
+    print(dim(gwas_out))
+    print(head(gwas_out))
+}
+gwas_out[, P:= p]
+```
+
+Great, now I can plot:
+
+```{r}
+extract_gwas <- function (gwas_, chr, start, end) {
+    chr_ <- paste0("chr", chr, sep = "")
+    return (gwas_[(CHR == chr_ & POS >= start & POS <= end)])
+}
+get_genes <- function (data_) {
+    
+    chr_ <- unique(data_[, chromosome])
+    
+    if (("build_37_pos" %in% colnames(data_)) & (! "POS" %in% colnames(data_))) {
+        data_[, POS := build_37_pos]
+    }
+    
+    genes_in_region <- glida::queryUCSC(
+        glida::fromUCSCEnsemblGenes(chromosome = chr_,
+                                    start = data_[, min(POS)],
+                                    end = data_[, max(POS)])
+    )
+    genes_in_region <- genes_in_region[genes_in_region$geneType == "protein_coding", ]
+    
+    return (genes_in_region)
+}
+display_gwas <- function (data_) {
+    
+    chr_ <- unique(data_[, CHR])
+    data_[, chromosome := gsub("chr", "", CHR)]
+    
+    # Formatting and variable creation
+    # These are niceties to simplify the plotting and the interactive on_click
+    data_[, position := POS / 1000000]
+    data_[, association := -log10(P + 1e-50)]
+    
+    genes_in_region <- get_genes(data_)
+    
+    viz <- ggplot(data_, aes(x = position, y = association)) +
+        geom_point(colour = "dodgerblue", alpha = 0.3) +
+        ylab("-log10( pvalue )") + xlab("position (MB)") + 
+        ggtitle(sprintf("Chromosome %s : %s MB - %s MB", chr_, min(data_[, position]), max(data_[, position]))) +
+        theme_minimal()
+    
+    viz <- glida::geneAnnotation(viz, genes_in_region)
+    return (viz)
+    
+}
+
+display_gwas(extract_gwas(gwas_out, regions[1, CHR], regions[1, start], regions[1, end]))
+display_gwas(extract_gwas(gwas_out, regions[2, CHR], regions[2, start], regions[2, end]))
+display_gwas(extract_gwas(gwas_out, regions[5, CHR], regions[5, start], regions[5, end]))
+```
+
+Let's focus on that last region, the FTO locus. Below we will plot both the QTL and GWAS results for this region.
+
+```{r}
+library(RMySQL)
+
+p1 <- display_gwas(extract_gwas(gwas_out, regions[5, CHR], regions[5, start], regions[5, end]))
+
+qtl_data <- qtl_network(regions[5, CHR], regions[5, start], regions[5, end])
+p2 <- display_eqtls(qtl_data, show_tissues = FALSE, alpha_pvalues = FALSE, show_genes = TRUE)
+
+grid.arrange(p1, p2, nrow = 2)
+```
+
+How interesting - these two plots align perfectly along the x-axis. I didn't think that grid.arrange did this by default - perhaps it is just the data I have. Don't know, just an interesting observation. (I found out why, it is becasue the genes are identical, and these set the extreme limits. If you set show_genes = FALSE, then the x-axes do not align quite properly.)
+
+Of course, we are more interested in the pattern of QTLs compared to the pattern of GWAS results. it is interesting that the strongest GWAS signals do not have a correspondingly strong QTLs. Let's try plotting the QTL arcs as well:
+
+```{r}
+p3 <- display_qtl_network(p2, qtl_data[association > 5])
+
+grid.arrange(p1, p3, nrow = 2)
+```
+
+This is a little messy - but I kinda like it all the same. The QTL arcs show depict the QTL - gene relationship, with a nominal threshold of 1x10-05. There is possibly one nominally-significant QTLs for FTO **under the GWAS peak**. Instead, it appears the the QTLs point towards RBKS / AKTIP and IRX3. Though we can't tell exactly from these plots, we migth guess that the strong IRX3 arc matches the strong FTO GWAS peak, just roughly based on the density of these two signals and the approx. location.
+
+Any obervations here should be taken with a real grain of salt however. The QTL pvalues are still quite weak underneath the GWAS signal, so this isn't "strong evidence" of a pattern, not even totally convinced it is suggestive evidence... 
+
+There needs to be some way to summarise the GWAS peak region. It is a little tricky, because within the GWAS peak region, there are the strongly associated SNPs, but there are also low-associated SNPs within the region. Perhaps I want to say something like:  
+
+    - if I take 100 SNPs around the GWAS peak, what is the ratio / distribution of pvalues?  
+    - if I take a similar 100 SNP window in the QTLs, what is the distribution of pvalues by gene?  
+    
+If there is a QTL pattern within this 100 SNP window, we would expect there to be some overrepresentation of the genes wouldn't we? Let's have a look.
+
+STEP 1: find the most-associated GWAS SNP and then extract all results 100 bases either side.
+
+```{r}
+fto_gwas <- extract_gwas(gwas_out, regions[5, CHR], regions[5, start], regions[5, end])
+
+fto_center <- fto_gwas[P == min(P), POS]
+fto_peak <- fto_gwas[(POS > fto_center - 20000 & POS < fto_center + 20000)]
+
+boundary <- fto_peak[, .(start = min(POS), end = max(POS))]
+
+xs <- qtl_data[(POS > boundary$start & POS < boundary$end)]
+table(xs$gene_symbol)
+```
+
+Cool I like this. Feels like we are getting somewhere now. Let's explore the distribution of qtl pvalues for these genes
+
+```{r}
+ggplot(xs, aes(x = -log10(pvalue), group = gene_symbol, colour = gene_symbol)) +
+    geom_density(alpha = 0.3, position = "dodge") +
+    theme_minimal()
+```
+
+Hmmm, are those peaks over to the right interesting? Let's try plotting a similar "null" distribution:
+
+```{r}
+zs <- runif(1000000)
+zs <- data.table(gene_symbol = "the null", pvalue = zs[zs < 0.01])
+xs <- rbind(xs, zs, fill = TRUE)
+
+ggplot(xs, aes(x = -log10(pvalue), group = gene_symbol, colour = gene_symbol)) +
+    geom_density(alpha = 0.3, position = "dodge") +
+    facet_wrap(~ gene_symbol) +
+    theme_minimal()
+```
+
+Nice idea - but again a little nebulous. No clear strong evidence in this. I think part of the problem here is that there are no clear strong QTLs. Haha.
