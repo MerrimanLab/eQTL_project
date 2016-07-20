@@ -199,7 +199,7 @@ get_genes <- function (data_) {
     
     return (genes_in_region)
 }
-display_eqtls <- function (data_, gwas_data = NULL,
+display_eqtls <- function (data_,
                            show_genes = TRUE, show_tissues = TRUE, alpha_pvalues = TRUE,
                            show_title = TRUE) {
     
@@ -212,23 +212,15 @@ display_eqtls <- function (data_, gwas_data = NULL,
     data_[, position := build_37_pos / 1000000]
     data_[, association := -log10(pvalue + 1e-20)]
     
-    # weight the size of points
-    if (!is.null(gwas_data)) {
-        gwas_data[is.na(P), P := 1e-50]
-        data_[, gwas_weight_ := weight_(gwas_data, build_37_pos), by = build_37_pos]
-    } else {
-        data_[, gwas_weight_ := 0.5]
-    }
-    print(data_[, .(build_37_pos, gwas_weight_)])
     
     viz <- ggplot(data_, aes(x = position, y = association)) +
-        geom_point(aes(shape = ifelse(show_tissues, factor(smts), 'a')),
-                   size = data_[, gwas_weight_],
-                   alpha = ifelse(alpha_pvalues, sqrt(1 / (data_[,pvalue] + 1e-20)), 0.3),
+        geom_point(aes(shape = if (show_tissues) factor(smts) else "none",
+                       size = 1,
+                       alpha = sqrt(1 / (pvalue + 1e-50))),
                    colour = "darkblue") +
         ylab("-log10( pvalue )") + xlab(sprintf("CHR%s position (MB)", chr_)) + 
         ggtitle(ifelse(show_title, sprintf("%s locus", gene_), "")) +
-        guides(size = "none", alpha = "none", shape = ifelse(show_tissues, NULL, "none")) +
+        guides(size = "none", alpha = "none", shape = ifelse(show_tissues, "legend", "none")) +
         theme_minimal()
     
     if (show_genes) {
@@ -332,36 +324,5 @@ display_qtl_network <- function (viz, long_range_qtls, show_endpoint = TRUE) {
         theme_minimal()
     
     return (layer_)
-}
-
-nearest_neighbours <- function (ref_position, gwas) {
-    
-    dx <- as.matrix(dist(c(ref_position, gwas$POS)))
-    dx <- sort(dx[1, ], decreasing = FALSE)
-    
-    return (dx)
-}
-weighted_pvalue <- function (gwas, dx) {
-    sum(-log10(gwas$P + 1e-50) * (1 / dx))
-}
-
-weight_ <- function (gwas, x, k = 5) {
-    
-    nearest_ <- function () {
-        DX <- as.matrix(dist(c(x, gwas$POS)))[1, -1]
-        
-        return (DX[order(DX, decreasing = FALSE)])
-    }
-    
-    dx_ <- nearest_()[1:k] 
-    idx_ <- as.integer(names(dx_))
-    
-    #size_ <- sum(-log10(gwas[idx_, P]) / dx_)
-    size_ <- -log10(  gwas[idx_, P] * (dx_ / min(dx_)))
-    #size_ <- mean(-log10(gwas[idx_, P]) / 1:10)
-    size_[is.na(size_)] <- 100
-    size_ <- (size_ - min(size_)) / (max(size_) + min(size_)) * 10
-    size_ <- mean(size_)
-    return (size_)
 }
 

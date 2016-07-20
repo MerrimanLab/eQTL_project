@@ -84,7 +84,6 @@ shinyServer(function(input, output) {
         long_range_qtls <- qtl_network(chr_, start_, end_)
         
         output$plt_gwas <- renderPlot({
-<<<<<<< HEAD
             display_gwas(gwas_data_) + xlim(start_ / 1000000, end_ / 1000000)
         })
         output$plt_qtl_network <- renderPlot({
@@ -117,7 +116,7 @@ shinyServer(function(input, output) {
                                                           (build_37_pos < (input$gwas_peak$xmax * 1000000)))],
                                 show_endpoint = FALSE) + xlim(input$gwas_peak$xmin, input$gwas_peak$xmax)
             #+ xlim(start_ / 1000000, end_ / 1000000)
-=======
+
             display_gwas(gwas_data_) + 
                 geom_curve(data = long_range_qtls,
                            aes(gene_midpoint / 1000000, xend = build_37_pos / 1000000, 
@@ -128,7 +127,6 @@ shinyServer(function(input, output) {
                           aes(x = gene_midpoint / 1000000, y = -10, label = gene_symbol)) +
                 guides(alpha = "none") +
                 theme_minimal()
->>>>>>> da1776b51d6a58d7f0646c6ca6ab230a8d8c7292
         })
     })
 })
