@@ -288,7 +288,7 @@ extract_gwas <- function (file_, chr_, start_, end_) {
     return (gwas_[(CHR == chr_ & POS >= start_ & POS <= end_)])
 }
 
-display_gwas <- function (data_) {
+display_gwas <- function (data_, show_genes = TRUE) {
     
     chr_ <- unique(data_[, CHR])
     data_[, chromosome := CHR]
@@ -296,15 +296,18 @@ display_gwas <- function (data_) {
     # Formatting and variable creation
     # These are niceties to simplify the plotting and the interactive on_click
     data_[, position := POS / 1000000]
-    data_[, association := -log10(P + 1e-20)]
-    
-    genes_in_region <- get_genes(data_)
+    data_[, association := -log10(P + 1e-50)]
     
     viz <- ggplot(data_, aes(x = position, y = association)) +
         geom_point(colour = "dodgerblue", alpha = 0.3) +
         ylab("-log10( pvalue )") + xlab("position (MB)") + 
         ggtitle(sprintf("Chromosome %s : %s MB - %s MB", chr_, min(data_[, position]), max(data_[, position]))) +
         theme_minimal()
+    
+    if (show_genes) {
+        genes_in_region <- get_genes(data_)
+        viz <- glida::geneAnnotation(viz, genes_in_region)
+    }
     
     return (viz)
     
