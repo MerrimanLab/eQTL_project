@@ -102,7 +102,7 @@ shinyUI(fluidPage(
                 h4("eQTL and GWAS"),
                 br(),
                 tags$div(
-                    plotOutput("plt_gwas", brush = "gwas_peak"),
+                    plotOutput("plt_gwas"),# brush = "gwas_peak"),
                     class = "plot_main"
                 ),
                 tags$div(
